@@ -1,0 +1,11 @@
+{
+  "deepinfra_api_key": "YOUR_API_KEY_HERE",
+  "deepinfra_base_url": "https://api.deepinfra.com/v1/openai/images/generations",
+  "model": "black-forest-labs/FLUX-1-schnell",
+  "generation_steps": 4,
+  "aseprite_path": "D:\\Apps\\Aseprite\\Aseprite-v1.3.17-x64\\Aseprite.exe",
+  "frames_dir": "frames",
+  "output_dir": "output",
+  "default_sprite_size": 64,
+  "generation_timeout": 120
+}

@@ -1,0 +1,25 @@
+# API keys and secrets — NEVER commit
+config.json
+*.env
+
+# Generated output
+output/
+frames/
+reference-library/
+generation-log.jsonl
+*.png
+*.gif
+*.jpg
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Aseprite (Windows path, not needed in repo)
+*.aseprite

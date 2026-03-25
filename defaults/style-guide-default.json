@@ -1,0 +1,32 @@
+{
+  "name": "Classic Pixel RPG",
+  "version": "1.0",
+  "palette": {
+    "primary": "#4a6741",
+    "secondary": "#8b7355",
+    "accent": "#d4a574",
+    "background": "#1a1a2e",
+    "highlight": "#ffd700",
+    "shadow": "#2d2d44",
+    "skin_tones": ["#f4c59c", "#c8a882", "#8d5a3c"],
+    "forbidden_colors": ["#ffffff", "#000000"]
+  },
+  "art_style": {
+    "pixel_size": "medium",
+    "outline": "1px",
+    "shading": "flat",
+    "dithering": "none",
+    "anti_aliasing": "none"
+  },
+  "constraints": {
+    "max_colors_per_sprite": 24,
+    "transparent_bg": true,
+    "preferred_sprite_sizes": [16, 32, 48, 64],
+    "animation_style": "smooth_loop"
+  },
+  "keywords": {
+    "always_include": ["clean pixel art", "game sprite", "no dithering", "crisp pixels", "flat shading"],
+    "never_include": ["photorealistic", "3d render", "photograph", "anti-aliased", "smooth shading"]
+  },
+  "description": "Clean, classic pixel art style inspired by 16-bit era RPGs. Limited palette, crisp 1px outlines, flat shading. Works well for characters, items, and environmental sprites."
+}

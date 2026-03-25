@@ -1,0 +1,1366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sprite Generator Pro</title>
+<style>
+/* ─── Reset & Base ──────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #12121e;
+  --surface:   #1c1c2e;
+  --surface2:  #252538;
+  --border:    #333355;
+  --border2:   #44446a;
+  --accent:    #7c6fff;
+  --accent2:   #5a52e0;
+  --accent-glow: rgba(124,111,255,0.25);
+  --green:     #4cff91;
+  --red:       #ff6b6b;
+  --yellow:    #ffd93d;
+  --text:      #e4e4f0;
+  --text-dim:  #8888aa;
+  --text-muted:#55556a;
+  --radius:    10px;
+  --radius-sm: 6px;
+  --transition: 0.18s ease;
+}
+
+body {
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ─── Header ─────────────────────────────────────────────────────────────── */
+header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+header .logo { font-size: 1.2em; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px; }
+header .logo span { color: var(--accent); }
+.tabs { display: flex; gap: 4px; }
+.tab-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  font-size: 0.85em;
+  font-weight: 500;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.tab-btn:hover { color: var(--text); background: var(--surface2); }
+.tab-btn.active { color: var(--accent); background: var(--accent-glow); border-color: var(--accent); }
+
+/* ─── Main layout ─────────────────────────────────────────────────────────── */
+.main-layout {
+  display: flex;
+  flex: 1;
+  gap: 0;
+  overflow: hidden;
+  height: calc(100vh - 57px);
+}
+
+/* ─── Left Sidebar ────────────────────────────────────────────────────────── */
+.sidebar {
+  width: 300px;
+  min-width: 300px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sidebar::-webkit-scrollbar { width: 4px; }
+.sidebar::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+
+.panel {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+.panel-title {
+  font-size: 0.7em;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.panel-title .badge {
+  background: var(--accent);
+  color: #fff;
+  border-radius: 10px;
+  padding: 1px 7px;
+  font-size: 0.85em;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* ─── Center content ──────────────────────────────────────────────────────── */
+.center {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.center::-webkit-scrollbar { width: 6px; }
+.center::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+
+/* ─── Form elements ────────────────────────────────────────────────────────── */
+label, .field-label {
+  display: block;
+  font-size: 0.8em;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+textarea, select, input[type="text"], input[type="number"], input[type="password"] {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 9px 11px;
+  font-family: inherit;
+  font-size: 0.88em;
+  outline: none;
+  transition: border-color var(--transition);
+}
+textarea:focus, select:focus, input:focus { border-color: var(--accent); }
+textarea { resize: vertical; min-height: 72px; }
+textarea::placeholder, input::placeholder { color: var(--text-muted); }
+select { cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%238888aa' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 28px; }
+.input-hint { font-size: 0.72em; color: var(--text-muted); margin-top: 3px; }
+
+/* ─── Action buttons grid ─────────────────────────────────────────────────── */
+.actions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  gap: 6px;
+  margin-top: 8px;
+}
+.action-btn {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 7px 4px;
+  color: var(--text-dim);
+  font-size: 0.75em;
+  cursor: pointer;
+  text-align: center;
+  transition: var(--transition);
+  user-select: none;
+}
+.action-btn:hover { border-color: var(--accent); color: var(--text); }
+.action-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* ─── Generate button ─────────────────────────────────────────────────────── */
+.btn-generate {
+  width: 100%;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  padding: 14px;
+  font-size: 0.95em;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.btn-generate:hover:not(:disabled) { background: var(--accent2); transform: translateY(-1px); }
+.btn-generate:disabled { background: var(--border); color: var(--text-muted); cursor: not-allowed; transform: none; }
+
+/* ─── Progress ────────────────────────────────────────────────────────────── */
+.progress-section { display: none; }
+.progress-section.visible { display: block; }
+.progress-bar-wrap { background: var(--bg); border-radius: 6px; height: 6px; overflow: hidden; margin-top: 8px; }
+.progress-fill { background: linear-gradient(90deg, var(--accent), #a89cff); height: 100%; width: 0%; transition: width 0.4s ease; border-radius: 6px; }
+.progress-msg { font-size: 0.8em; color: var(--text-dim); margin-top: 6px; }
+.console-log {
+  background: #0a0a14;
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.72em;
+  color: #6a6a8a;
+  max-height: 120px;
+  overflow-y: auto;
+  margin-top: 8px;
+  line-height: 1.6;
+}
+.console-log .err { color: var(--red); }
+.console-log .ok  { color: var(--green); }
+
+/* ─── Error ───────────────────────────────────────────────────────────────── */
+.error-box {
+  background: rgba(255,107,107,0.1);
+  border: 1px solid var(--red);
+  border-radius: var(--radius);
+  padding: 12px;
+  color: var(--red);
+  font-size: 0.85em;
+  display: none;
+}
+.error-box.visible { display: block; }
+
+/* ─── Output panel ────────────────────────────────────────────────────────── */
+.output-section { display: none; }
+.output-section.visible { display: block; }
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.section-title { font-size: 0.85em; font-weight: 600; color: var(--text-dim); }
+
+/* Frame grid */
+.frame-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.frame-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: var(--transition);
+  position: relative;
+}
+.frame-card:hover { border-color: var(--accent); }
+.frame-card.selected { border-color: var(--green); background: rgba(76,255,145,0.05); }
+.frame-card .frame-img {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  border-radius: 4px;
+  background: repeating-conic-gradient(#222 0% 25%, #2a2a3a 0% 50%) 0 0 / 16px 16px;
+}
+.frame-card .frame-label { font-size: 0.65em; color: var(--text-dim); text-align: center; }
+.frame-card .frame-check {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  background: var(--accent);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: #fff;
+}
+.frame-card.selected .frame-check { display: flex; }
+.frame-card .regen-btn {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 4px;
+  color: var(--text-dim);
+  font-size: 0.6em;
+  padding: 2px 5px;
+  cursor: pointer;
+  display: none;
+  transition: var(--transition);
+}
+.frame-card:hover .regen-btn { display: block; }
+.frame-card .regen-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Sheet preview */
+.sheet-preview {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.sheet-preview img {
+  max-width: 100%;
+  max-height: 300px;
+  image-rendering: pixelated;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+.gif-preview img {
+  max-height: 200px;
+  image-rendering: pixelated;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+.download-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.download-btn {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 0.8em;
+  padding: 8px 16px;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: var(--transition);
+}
+.download-btn:hover { border-color: var(--accent); color: var(--accent); }
+.download-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.download-btn.primary:hover { background: var(--accent2); }
+
+/* ─── Style Guide Panel ────────────────────────────────────────────────────── */
+.style-presets-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.preset-chip {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 3px 10px;
+  font-size: 0.72em;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: var(--transition);
+}
+.preset-chip:hover { border-color: var(--accent); color: var(--text); }
+.preset-chip.active { background: var(--accent-glow); border-color: var(--accent); color: var(--accent); }
+.style-actions { display: flex; gap: 6px; margin-top: 8px; }
+.style-actions input { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); padding: 5px 8px; font-size: 0.78em; outline: none; }
+.style-actions input:focus { border-color: var(--accent); }
+
+/* ─── Reference Upload ─────────────────────────────────────────────────────── */
+.ref-dropzone {
+  border: 2px dashed var(--border2);
+  border-radius: var(--radius);
+  padding: 16px;
+  text-align: center;
+  cursor: pointer;
+  transition: var(--transition);
+  font-size: 0.82em;
+  color: var(--text-dim);
+}
+.ref-dropzone:hover, .ref-dropzone.dragover { border-color: var(--accent); background: var(--accent-glow); color: var(--text); }
+.ref-dropzone input { display: none; }
+.ref-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.ref-thumb {
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 2px solid var(--border);
+  cursor: pointer;
+  transition: var(--transition);
+}
+.ref-thumb:hover { border-color: var(--accent); }
+.ref-thumb.active { border-color: var(--green); }
+.ref-thumb .del-ref {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: var(--red);
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  font-size: 10px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+/* ─── Generation Log ───────────────────────────────────────────────────────── */
+.gen-log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.gen-log-entry {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: var(--transition);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.gen-log-entry:hover { border-color: var(--accent); }
+.gen-log-entry .log-thumb {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  border-radius: 4px;
+  background: repeating-conic-gradient(#222 0% 25%, #2a2a3a 0% 50%) 0 0 / 12px 12px;
+  flex-shrink: 0;
+}
+.gen-log-entry .log-info { flex: 1; min-width: 0; }
+.gen-log-entry .log-prompt {
+  font-size: 0.78em;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 3px;
+}
+.gen-log-entry .log-meta { font-size: 0.68em; color: var(--text-muted); display: flex; gap: 8px; flex-wrap: wrap; }
+.log-load-btn {
+  background: var(--accent-glow);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  color: var(--accent);
+  font-size: 0.7em;
+  padding: 3px 8px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.log-clear-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: 0.7em;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.log-clear-btn:hover { border-color: var(--red); color: var(--red); }
+
+/* ─── Settings ─────────────────────────────────────────────────────────────── */
+.settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.settings-grid .full { grid-column: 1 / -1; }
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.range-row { display: flex; align-items: center; gap: 8px; }
+.range-val { font-size: 0.8em; color: var(--accent); min-width: 20px; text-align: center; }
+.save-config-btn {
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  font-size: 0.85em;
+  padding: 9px 16px;
+  cursor: pointer;
+  transition: var(--transition);
+  width: 100%;
+  margin-top: 10px;
+}
+.save-config-btn:hover { background: var(--accent2); }
+
+/* ─── Templates ───────────────────────────────────────────────────────────── */
+.template-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.template-btn {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 7px 10px;
+  font-size: 0.75em;
+  color: var(--text-dim);
+  cursor: pointer;
+  text-align: left;
+  transition: var(--transition);
+}
+.template-btn:hover { border-color: var(--accent); color: var(--text); }
+.template-btn.active { background: var(--accent-glow); border-color: var(--accent); color: var(--accent); }
+
+/* ─── Responsive ───────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .main-layout { flex-direction: column; height: auto; }
+  .sidebar { width: 100%; min-width: unset; border-right: none; border-bottom: 1px solid var(--border); max-height: 400px; }
+  .settings-grid { grid-template-columns: 1fr; }
+  .template-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header>
+  <div class="logo">🎨 <span>SpriteGen</span> Pro</div>
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="generate">Generate</button>
+    <button class="tab-btn" data-tab="log">History</button>
+    <button class="tab-btn" data-tab="settings">Settings</button>
+  </div>
+</header>
+
+<!-- Main layout -->
+<div class="main-layout">
+
+  <!-- Left Sidebar -->
+  <div class="sidebar" id="sidebar-generate">
+
+    <!-- Style Guide -->
+    <div class="panel">
+      <div class="panel-title">🎭 Style Guide</div>
+      <div class="style-presets-row" id="style-presets"></div>
+      <textarea id="style-guide" placeholder="e.g. clean pixel art, 32-color palette, dark fantasy, Game Boy Color era..."></textarea>
+      <div class="style-actions">
+        <input id="preset-name" placeholder="Preset name...">
+        <button class="btn-sm" onclick="saveStylePreset()">Save</button>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:6px;">
+        <button class="btn-sm secondary" onclick="loadStyleGuide()">Load</button>
+        <button class="btn-sm secondary" onclick="clearStyleGuide()">Clear</button>
+      </div>
+    </div>
+
+    <!-- Reference Image -->
+    <div class="panel">
+      <div class="panel-title">🖼️ Reference Image</div>
+      <div class="ref-dropzone" id="ref-dropzone" onclick="document.getElementById('ref-file-input').click()">
+        <div>Drop image here or click to upload</div>
+        <div style="font-size:0.7em;margin-top:4px;color:var(--text-muted)">PNG, JPG, WebP, GIF</div>
+        <input type="file" id="ref-file-input" accept="image/*" onchange="handleRefUpload(this.files[0])">
+      </div>
+      <div id="ref-list" class="ref-list"></div>
+      <div id="ref-selected" style="font-size:0.72em;color:var(--text-dim);margin-top:6px;display:none;">
+        Using: <span id="ref-selected-name"></span>
+        <button onclick="clearRefSelection()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:0.9em;margin-left:4px;">✕</button>
+      </div>
+    </div>
+
+    <!-- Prompt Template -->
+    <div class="panel">
+      <div class="panel-title">📋 Prompt Template</div>
+      <div id="template-grid" class="template-grid"></div>
+    </div>
+
+  </div>
+
+  <!-- Main Center Area -->
+  <div class="center" id="center-generate">
+
+    <!-- Generate Tab -->
+    <div id="tab-generate">
+      <div class="panel">
+        <div class="panel-title">Character / Sprite Description</div>
+        <textarea id="prompt" placeholder="e.g. isometric pixel art businessman, pristine navy suit..." style="min-height:90px;">isometric pixel art businessman, pristine navy suit, white shirt, red tie, polished shoes, holding a briefcase, front facing, clean retro style, transparent background</textarea>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Layout & Animation</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+          <div>
+            <label>Grid Size</label>
+            <select id="grid_size">
+              <option value="2">2×2 (4 frames)</option>
+              <option value="3">3×3 (9 frames)</option>
+              <option value="4" selected>4×4 (16 frames)</option>
+              <option value="5">5×5 (25 frames)</option>
+              <option value="6">6×6 (36 frames)</option>
+            </select>
+          </div>
+          <div>
+            <label>Sprite Size (px)</label>
+            <select id="sprite_size">
+              <option value="16">16×16</option>
+              <option value="32">32×32</option>
+              <option value="64" selected>64×64</option>
+              <option value="128">128×128</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label>Animation Actions</label>
+          <div class="actions-grid" id="actions-grid"></div>
+          <p class="input-hint">Actions cycle across frames. With 4×4 + idle+walk+run+attack = 16 frames (4 each).</p>
+        </div>
+      </div>
+
+      <button class="btn-generate" id="generate-btn" onclick="generate()">
+        <span>✨</span> Generate Sprite Sheet
+      </button>
+
+      <!-- Progress -->
+      <div class="progress-section" id="progress-section">
+        <div class="panel">
+          <div class="progress-msg" id="progress-msg">Initializing...</div>
+          <div class="progress-bar-wrap"><div class="progress-fill" id="progress-fill"></div></div>
+          <div class="console-log" id="console-log"></div>
+        </div>
+      </div>
+
+      <!-- Error -->
+      <div class="error-box" id="error-box"></div>
+
+      <!-- Output -->
+      <div class="output-section" id="output-section">
+
+        <!-- Frame Grid -->
+        <div class="panel">
+          <div class="section-header">
+            <div class="section-title">Individual Frames</div>
+            <button class="download-btn" onclick="downloadSelectedFrames()">⬇ Download Selected</button>
+          </div>
+          <div class="frame-grid" id="frame-grid"></div>
+        </div>
+
+        <!-- Sprite Sheet Preview -->
+        <div class="panel sheet-preview" id="sheet-preview-wrap">
+          <div class="section-title">Sprite Sheet</div>
+          <img id="sheet-preview-img" src="" alt="Sprite Sheet">
+          <div class="download-row">
+            <a class="download-btn primary" id="dl-sheet" href="">Download Sheet PNG</a>
+            <a class="download-btn" id="dl-json" href="">Download JSON</a>
+            <a class="download-btn" id="dl-frames" href="">Download All Frames</a>
+          </div>
+        </div>
+
+        <!-- GIF Preview -->
+        <div class="panel gif-preview" id="gif-preview-wrap" style="display:none;">
+          <div class="section-title">Animation Preview</div>
+          <img id="gif-preview-img" src="" alt="Animation">
+          <a class="download-btn primary" id="dl-gif" href="">Download GIF</a>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Log Tab -->
+    <div id="tab-log" style="display:none;">
+      <div class="panel">
+        <div class="section-header">
+          <div class="section-title">Generation History</div>
+          <button class="log-clear-btn" onclick="clearGenLog()">Clear Log</button>
+        </div>
+        <div class="gen-log-list" id="gen-log-list"></div>
+      </div>
+    </div>
+
+    <!-- Settings Tab -->
+    <div id="tab-settings" style="display:none;">
+      <div class="panel">
+        <div class="panel-title">API & Model</div>
+        <div class="settings-grid">
+          <div class="full">
+            <label>DeepInfra API Key</label>
+            <input type="password" id="cfg-api-key" placeholder="sk-..." autocomplete="off">
+          </div>
+          <div class="full">
+            <label>API Base URL</label>
+            <input type="text" id="cfg-base-url" placeholder="https://api.deepinfra.com/v1/openai/images/generations">
+          </div>
+          <div>
+            <label>Model</label>
+            <input type="text" id="cfg-model" placeholder="black-forest-labs/FLUX-1-schnell">
+          </div>
+          <div>
+            <label>Ollama Endpoint (optional)</label>
+            <input type="text" id="cfg-ollama" placeholder="http://localhost:11434">
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Generation</div>
+        <div class="settings-grid">
+          <div class="full">
+            <label>Steps: <span class="range-val" id="steps-val">4</span></label>
+            <input type="range" id="cfg-steps" min="1" max="8" value="4"
+              oninput="document.getElementById('steps-val').textContent = this.value">
+          </div>
+          <div>
+            <label>Seed (optional)</label>
+            <input type="number" id="cfg-seed" placeholder="Leave blank for random">
+          </div>
+          <div>
+            <label>Default Sprite Size</label>
+            <select id="cfg-sprite-size">
+              <option value="16">16px</option>
+              <option value="32">32px</option>
+              <option value="64" selected>64px</option>
+              <option value="128">128px</option>
+            </select>
+          </div>
+        </div>
+        <button class="save-config-btn" onclick="saveConfig()">💾 Save Settings</button>
+      </div>
+    </div>
+
+  </div><!-- /center -->
+</div><!-- /main-layout -->
+
+<script>
+// ─── State ────────────────────────────────────────────────────────────────────
+const state = {
+  selectedActions: new Set(['idle']),
+  selectedRef: null,        // { reference_id, filename }
+  selectedTemplate: null,   // template name string
+  selectedFrames: new Set(),
+  currentOutputName: null,
+  currentFrames: [],        // [{url, action}]
+  stylePresets: {},         // { name: style_string }
+  currentStyle: '',
+};
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+(async function init() {
+  // Load actions
+  await loadActions();
+
+  // Load style guide + presets
+  await loadStyleGuide();
+
+  // Load templates
+  await loadTemplates();
+
+  // Load references
+  await loadReferences();
+
+  // Load config
+  await loadConfig();
+
+  // Load generation log
+  await loadGenLog();
+})();
+
+// ─── Tab navigation ───────────────────────────────────────────────────────────
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const tab = btn.dataset.tab;
+    document.getElementById('tab-generate').style.display = tab === 'generate' ? 'block' : 'none';
+    document.getElementById('tab-log').style.display     = tab === 'log'      ? 'block' : 'none';
+    document.getElementById('tab-settings').style.display = tab === 'settings' ? 'block' : 'none';
+    if (tab === 'log') loadGenLog();
+  });
+});
+
+// ─── Actions ───────────────────────────────────────────────────────────────────
+async function loadActions() {
+  try {
+    const res = await fetch('/actions');
+    const data = await res.json();
+    const grid = document.getElementById('actions-grid');
+    grid.innerHTML = '';
+    (data.actions || []).forEach(action => {
+      const btn = document.createElement('button');
+      btn.className = 'action-btn' + (state.selectedActions.has(action) ? ' active' : '');
+      btn.dataset.action = action;
+      btn.textContent = action.charAt(0).toUpperCase() + action.slice(1);
+      btn.addEventListener('click', () => toggleAction(action, btn));
+      grid.appendChild(btn);
+    });
+  } catch (e) { console.warn('Failed to load actions', e); }
+}
+
+function toggleAction(action, btn) {
+  if (state.selectedActions.has(action)) {
+    if (state.selectedActions.size > 1) {
+      state.selectedActions.delete(action);
+      btn.classList.remove('active');
+    }
+  } else {
+    state.selectedActions.add(action);
+    btn.classList.add('active');
+  }
+}
+
+// ─── Style Guide ───────────────────────────────────────────────────────────────
+async function loadStyleGuide() {
+  try {
+    const res = await fetch('/style-guide');
+    const data = await res.json();
+    state.currentStyle = data.current || '';
+    state.stylePresets = data.presets || {};
+    document.getElementById('style-guide').value = state.currentStyle;
+    renderStylePresets();
+  } catch(e) { console.warn('Failed to load style guide', e); }
+}
+
+function renderStylePresets() {
+  const row = document.getElementById('style-presets');
+  row.innerHTML = '';
+  const names = Object.keys(state.stylePresets);
+  if (names.length === 0) return;
+  names.forEach(name => {
+    const chip = document.createElement('button');
+    chip.className = 'preset-chip';
+    chip.textContent = name;
+    chip.addEventListener('click', () => {
+      document.getElementById('style-guide').value = state.stylePresets[name];
+      state.currentStyle = state.stylePresets[name];
+      // Update active chip
+      row.querySelectorAll('.preset-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+    });
+    row.appendChild(chip);
+  });
+}
+
+async function saveStylePreset() {
+  const name = document.getElementById('preset-name').value.trim();
+  if (!name) { alert('Enter a preset name'); return; }
+  const style = document.getElementById('style-guide').value;
+  state.stylePresets[name] = style;
+  await fetch('/style-guide', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ presets: state.stylePresets })
+  });
+  document.getElementById('preset-name').value = '';
+  renderStylePresets();
+}
+
+async function clearStyleGuide() {
+  document.getElementById('style-guide').value = '';
+  state.currentStyle = '';
+  await fetch('/style-guide', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ current: '' })
+  });
+}
+
+// ─── Reference Images ───────────────────────────────────────────────────────────
+function setupDropzone() {
+  const dz = document.getElementById('ref-dropzone');
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault();
+    dz.classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file) handleRefUpload(file);
+  });
+}
+setupDropzone();
+
+async function handleRefUpload(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const res = await fetch('/upload-reference', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (data.error) { showError(data.error); return; }
+    state.selectedRef = { reference_id: data.reference_id, filename: data.filename };
+    updateRefUI();
+    await loadReferences();
+  } catch(e) { showError('Upload failed: ' + e.message); }
+}
+
+async function loadReferences() {
+  try {
+    const res = await fetch('/references');
+    const refs = await res.json();
+    const list = document.getElementById('ref-list');
+    list.innerHTML = '';
+    refs.forEach(ref => {
+      const wrap = document.createElement('div');
+      wrap.style.position = 'relative';
+      const img = document.createElement('img');
+      img.className = 'ref-thumb';
+      img.src = ref.url;
+      img.title = ref.filename;
+      img.addEventListener('click', () => {
+        state.selectedRef = { reference_id: ref.reference_id, filename: ref.filename };
+        updateRefUI();
+      });
+      img.addEventListener('dblclick', async () => {
+        if (confirm('Delete this reference?')) {
+          await fetch(`/reference/${ref.reference_id}`, { method: 'DELETE' });
+          if (state.selectedRef?.reference_id === ref.reference_id) clearRefSelection();
+          await loadReferences();
+        }
+      });
+      wrap.appendChild(img);
+      list.appendChild(wrap);
+    });
+  } catch(e) { console.warn('Failed to load references', e); }
+}
+
+function updateRefUI() {
+  const el = document.getElementById('ref-selected');
+  const name = document.getElementById('ref-selected-name');
+  if (state.selectedRef) {
+    el.style.display = 'block';
+    name.textContent = state.selectedRef.filename;
+    document.querySelectorAll('.ref-thumb').forEach(img => {
+      img.classList.toggle('active', img.title === state.selectedRef.filename);
+    });
+  } else {
+    el.style.display = 'none';
+    document.querySelectorAll('.ref-thumb').forEach(img => img.classList.remove('active'));
+  }
+}
+
+function clearRefSelection() {
+  state.selectedRef = null;
+  updateRefUI();
+}
+
+// ─── Prompt Templates ──────────────────────────────────────────────────────────
+async function loadTemplates() {
+  try {
+    const res = await fetch('/templates');
+    const templates = await res.json();
+    const grid = document.getElementById('template-grid');
+    grid.innerHTML = '';
+    Object.keys(templates).forEach(name => {
+      const btn = document.createElement('button');
+      btn.className = 'template-btn' + (state.selectedTemplate === name ? ' active' : '');
+      btn.textContent = name;
+      btn.addEventListener('click', () => {
+        state.selectedTemplate = state.selectedTemplate === name ? null : name;
+        grid.querySelectorAll('.template-btn').forEach(b => b.classList.remove('active'));
+        if (state.selectedTemplate) btn.classList.add('active');
+      });
+      grid.appendChild(btn);
+    });
+  } catch(e) { console.warn('Failed to load templates', e); }
+}
+
+// ─── Config ────────────────────────────────────────────────────────────────────
+async function loadConfig() {
+  try {
+    const res = await fetch('/config');
+    const cfg = await res.json();
+    document.getElementById('cfg-api-key').value   = cfg.deepinfra_api_key || '';
+    document.getElementById('cfg-base-url').value  = cfg.deepinfra_base_url || '';
+    document.getElementById('cfg-model').value     = cfg.model || '';
+    document.getElementById('cfg-ollama').value    = cfg.ollama_endpoint || '';
+    document.getElementById('cfg-steps').value     = cfg.generation_steps || 4;
+    document.getElementById('steps-val').textContent = cfg.generation_steps || 4;
+    document.getElementById('cfg-sprite-size').value = cfg.default_sprite_size || 64;
+    document.getElementById('cfg-seed').value      = cfg.seed || '';
+  } catch(e) { console.warn('Failed to load config', e); }
+}
+
+async function saveConfig() {
+  const apiKey = document.getElementById('cfg-api-key').value.trim();
+  const body = {
+    deepinfra_api_key: apiKey,
+    deepinfra_base_url: document.getElementById('cfg-base-url').value.trim(),
+    model: document.getElementById('cfg-model').value.trim(),
+    ollama_endpoint: document.getElementById('cfg-ollama').value.trim(),
+    generation_steps: parseInt(document.getElementById('cfg-steps').value),
+    default_sprite_size: parseInt(document.getElementById('cfg-sprite-size').value),
+  };
+  if (document.getElementById('cfg-seed').value.trim())
+    body.seed = document.getElementById('cfg-seed').value.trim();
+
+  try {
+    const res = await fetch('/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (data.error) { showError(data.error); return; }
+    // Re-mask the key display
+    if (apiKey && apiKey.length > 8)
+      document.getElementById('cfg-api-key').value = apiKey.slice(0,4) + '****' + apiKey.slice(-4);
+    log('Settings saved.', 'ok');
+  } catch(e) { showError('Failed to save settings: ' + e.message); }
+}
+
+// ─── Generation Log ────────────────────────────────────────────────────────────
+async function loadGenLog() {
+  try {
+    const res = await fetch('/generation-log');
+    const entries = await res.json();
+    const list = document.getElementById('gen-log-list');
+    list.innerHTML = '';
+    if (!entries.length) {
+      list.innerHTML = '<div style="font-size:0.8em;color:var(--text-muted);padding:8px 0;">No generations yet. Start creating!</div>';
+      return;
+    }
+    entries.forEach(entry => {
+      const ts = new Date(entry.timestamp).toLocaleString();
+      const actions = (entry.actions || []).join('+');
+      const div = document.createElement('div');
+      div.className = 'gen-log-entry';
+      const thumb = entry.sheet_url
+        ? `<img class="log-thumb" src="${entry.sheet_url}?t=${Date.now()}" onerror="this.style.display='none'">`
+        : `<div class="log-thumb"></div>`;
+      div.innerHTML = `
+        ${thumb}
+        <div class="log-info">
+          <div class="log-prompt">${escHtml(entry.prompt)}</div>
+          <div class="log-meta">
+            <span>${ts}</span>
+            <span>${entry.grid_size}×${entry.grid_size}</span>
+            <span>${actions}</span>
+            ${entry.template ? `<span>${escHtml(entry.template)}</span>` : ''}
+          </div>
+        </div>
+        <button class="log-load-btn" onclick="loadLogEntry(${escapeAttr(JSON.stringify(entry))})">Load</button>
+      `;
+      list.appendChild(div);
+    });
+  } catch(e) { console.warn('Failed to load log', e); }
+}
+
+function loadLogEntry(entry) {
+  document.getElementById('prompt').value = entry.prompt || '';
+  document.getElementById('grid_size').value = entry.grid_size || 4;
+  document.getElementById('sprite_size').value = entry.sprite_size || 64;
+  if (entry.style_guide) document.getElementById('style-guide').value = entry.style_guide;
+  if (entry.template) {
+    state.selectedTemplate = entry.template;
+    document.querySelectorAll('.template-btn').forEach(b => {
+      b.classList.toggle('active', b.textContent === entry.template);
+    });
+  }
+  if (entry.reference_image_id) {
+    state.selectedRef = { reference_id: entry.reference_image_id, filename: '' };
+    updateRefUI();
+  }
+  // Switch to generate tab
+  document.querySelector('[data-tab="generate"]').click();
+  log('Loaded generation from log.', 'ok');
+}
+
+async function clearGenLog() {
+  if (!confirm('Clear all generation history?')) return;
+  await fetch('/generation-log', { method: 'DELETE' }).catch(() => {});
+  await loadGenLog();
+}
+
+// ─── Generate ─────────────────────────────────────────────────────────────────
+async function generate() {
+  const btn = document.getElementById('generate-btn');
+  const prompt = document.getElementById('prompt').value.trim();
+  if (!prompt) { showError('Please enter a character description.'); return; }
+
+  btn.disabled = true;
+  btn.innerHTML = '⏳ Generating...';
+  document.getElementById('error-box').classList.remove('visible');
+  document.getElementById('output-section').classList.remove('visible');
+  document.getElementById('progress-section').classList.add('visible');
+  setProgress(0, 'Starting generation...');
+  clearLog();
+
+  const gridSize = parseInt(document.getElementById('grid_size').value);
+  const spriteSize = parseInt(document.getElementById('sprite_size').value);
+  const styleGuide = document.getElementById('style-guide').value.trim();
+  const seed = document.getElementById('cfg-seed').value.trim() || null;
+  const steps = parseInt(document.getElementById('cfg-steps').value);
+
+  const body = {
+    prompt,
+    actions: Array.from(state.selectedActions),
+    grid_size: gridSize,
+    sprite_size: spriteSize,
+    style_guide_override: styleGuide,
+    template_name: state.selectedTemplate || null,
+    reference_image_id: state.selectedRef?.reference_id || null,
+    seed,
+    steps,
+  };
+
+  log(`Generating ${gridSize * gridSize} frames (${gridSize}×${gridSize}, ${spriteSize}×${spriteSize}px)...`);
+  log(`Actions: ${body.actions.join(', ')}`);
+  if (body.template_name) log(`Template: ${body.template_name}`);
+  setProgress(5, 'Sending request to AI...');
+
+  try {
+    const res = await fetch('/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+
+    if (!res.ok || data.error) {
+      throw new Error(data.error || `HTTP ${res.status}`);
+    }
+
+    setProgress(100, 'Complete!');
+    log('Done! Sprite sheet generated successfully.', 'ok');
+    setTimeout(() => {
+      document.getElementById('progress-section').classList.remove('visible');
+      showOutput(data);
+    }, 400);
+  } catch(err) {
+    showError(err.message || 'Generation failed.');
+    log('ERROR: ' + err.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '✨ Generate Sprite Sheet';
+  }
+}
+
+function showOutput(data) {
+  state.currentOutputName = data.output_name;
+  state.currentFrames = [];
+  state.selectedFrames.clear();
+
+  // Sheet preview
+  const sheetImg = document.getElementById('sheet-preview-img');
+  sheetImg.src = data.sheet_url + '?t=' + Date.now();
+  document.getElementById('dl-sheet').href  = data.sheet_url;
+  document.getElementById('dl-json').href   = data.json_url;
+  document.getElementById('dl-frames').href = `/output/${data.output_name}_frames.zip`;
+
+  // GIF preview
+  const gifWrap = document.getElementById('gif-preview-wrap');
+  if (data.gif_url) {
+    gifWrap.style.display = 'flex';
+    document.getElementById('gif-preview-img').src = data.gif_url + '?t=' + Date.now();
+    document.getElementById('dl-gif').href = data.gif_url;
+  } else {
+    gifWrap.style.display = 'none';
+  }
+
+  // Frame grid
+  const frameGrid = document.getElementById('frame-grid');
+  frameGrid.innerHTML = '';
+  const totalFrames = data.total_frames || data.frame_urls.length;
+  const gridSize = data.grid_size || 4;
+  const actions = Array.from(state.selectedActions);
+
+  for (let i = 0; i < totalFrames; i++) {
+    const url = data.frame_urls[i] || `/frames/frame_${String(i).padStart(3,'0')}.png`;
+    const action = actions[i % actions.length];
+    state.currentFrames.push({ url, action, index: i });
+
+    const card = document.createElement('div');
+    card.className = 'frame-card';
+    card.dataset.index = i;
+    card.innerHTML = `
+      <div class="frame-check">✓</div>
+      <img class="frame-img" src="${url}?t=${Date.now()}" alt="Frame ${i}" loading="lazy">
+      <div class="frame-label">${action} #${i}</div>
+      <button class="regen-btn" onclick="event.stopPropagation();regenFrame(${i})">↻</button>
+    `;
+    card.addEventListener('click', (e) => {
+      if (e.target.classList.contains('regen-btn') || e.target.classList.contains('frame-check')) return;
+      card.classList.toggle('selected');
+      const idx = parseInt(card.dataset.index);
+      if (state.selectedFrames.has(idx)) state.selectedFrames.delete(idx);
+      else state.selectedFrames.add(idx);
+    });
+    frameGrid.appendChild(card);
+  }
+
+  document.getElementById('output-section').classList.add('visible');
+  // Scroll to output
+  document.getElementById('output-section').scrollIntoView({ behavior: 'smooth' });
+}
+
+// ─── Regenerate single frame ──────────────────────────────────────────────────
+async function regenFrame(index) {
+  const frame = state.currentFrames[index];
+  if (!frame) return;
+  const card = document.querySelector(`.frame-card[data-index="${index}"]`);
+  if (card) {
+    const btn = card.querySelector('.regen-btn');
+    btn.textContent = '⏳';
+    btn.disabled = true;
+  }
+  log(`Regenerating frame ${index}...`);
+
+  try {
+    const res = await fetch('/regenerate-frame', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        frame_index: index,
+        prompt: document.getElementById('prompt').value.trim(),
+        action: frame.action,
+        sprite_size: parseInt(document.getElementById('sprite_size').value),
+        style_guide_override: document.getElementById('style-guide').value.trim(),
+        template_name: state.selectedTemplate || null,
+        seed: document.getElementById('cfg-seed').value.trim() || null,
+        steps: parseInt(document.getElementById('cfg-steps').value),
+        output_name: state.currentOutputName,
+      })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    // Update frame image
+    const img = card?.querySelector('.frame-img');
+    if (img) img.src = data.frame_url + '?t=' + Date.now();
+    log(`Frame ${index} regenerated.`, 'ok');
+
+    // Rebuild sheet from all current frames
+    await rebuildSheet();
+  } catch(err) {
+    showError(`Frame regen failed: ${err.message}`);
+    log(`Frame ${index} regen failed: ${err.message}`, 'err');
+  } finally {
+    if (card) {
+      const btn = card.querySelector('.regen-btn');
+      btn.textContent = '↻';
+      btn.disabled = false;
+    }
+  }
+}
+
+async function rebuildSheet() {
+  try {
+    const res = await fetch('/rebuild-sheet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        grid_size: parseInt(document.getElementById('grid_size').value),
+        output_name: state.currentOutputName,
+      })
+    });
+    const data = await res.json();
+    if (data.error) return;
+    document.getElementById('sheet-preview-img').src = data.sheet_url + '?t=' + Date.now();
+    document.getElementById('dl-sheet').href = data.sheet_url;
+    if (data.gif_url) {
+      document.getElementById('gif-preview-wrap').style.display = 'flex';
+      document.getElementById('gif-preview-img').src = data.gif_url + '?t=' + Date.now();
+      document.getElementById('dl-gif').href = data.gif_url;
+    }
+    // Update frame URLs
+    data.frame_urls.forEach((url, i) => {
+      state.currentFrames[i] = { ...state.currentFrames[i], url };
+      const card = document.querySelector(`.frame-card[data-index="${i}"]`);
+      if (card) card.querySelector('.frame-img').src = url + '?t=' + Date.now();
+    });
+  } catch(e) { console.warn('Rebuild sheet failed', e); }
+}
+
+// ─── Download Selected Frames ──────────────────────────────────────────────────
+async function downloadSelectedFrames() {
+  const selected = Array.from(state.selectedFrames);
+  if (!selected.length) {
+    showError('Select at least one frame to download.');
+    return;
+  }
+  if (selected.length === 1) {
+    const frame = state.currentFrames[selected[0]];
+    const a = document.createElement('a');
+    a.href = frame.url;
+    a.download = `frame_${String(selected[0]).padStart(3,'0')}.png`;
+    a.click();
+    return;
+  }
+  // Multi: open each in new tab for browser download
+  selected.forEach(idx => {
+    const frame = state.currentFrames[idx];
+    if (!frame) return;
+    const a = document.createElement('a');
+    a.href = frame.url + '?download=1';
+    a.download = `frame_${String(idx).padStart(3,'0')}.png`;
+    a.target = '_blank';
+    a.click();
+  });
+}
+
+// ─── Progress & Log ────────────────────────────────────────────────────────────
+function setProgress(pct, msg) {
+  document.getElementById('progress-fill').style.width = pct + '%';
+  if (msg) document.getElementById('progress-msg').textContent = msg;
+}
+
+function log(msg, type = '') {
+  const el = document.getElementById('console-log');
+  el.classList.add('visible');
+  const div = document.createElement('div');
+  div.className = type;
+  div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight;
+}
+
+function clearLog() {
+  document.getElementById('console-log').innerHTML = '';
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-box');
+  el.innerText = msg;
+  el.classList.add('visible');
+}
+
+// ─── Utilities ─────────────────────────────────────────────────────────────────
+function escHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function escapeAttr(s) {
+  return JSON.stringify(String(s));
+}
+
+// Small style buttons
+document.head.insertAdjacentHTML('beforeend', `
+<style>
+.btn-sm {
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  font-size: 0.78em;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: var(--transition);
+  white-space: nowrap;
+}
+.btn-sm:hover { background: var(--accent2); }
+.btn-sm.secondary { background: var(--surface); border: 1px solid var(--border2); color: var(--text-dim); }
+.btn-sm.secondary:hover { border-color: var(--accent); color: var(--text); }
+</style>`);
+</script>
+</body>
+</html>

@@ -1,0 +1,183 @@
+{
+  "character-warrior": {
+    "name": "Warrior Character",
+    "template": "fierce warrior, battle-worn [CLOTHING], [WEAPON], [ACCESSORY], [VIEW_ANGLE], [ACTION]",
+    "variables": {
+      "CLOTHING": "plate armor",
+      "WEAPON": "sword and shield",
+      "ACCESSORY": "battle scars, determined expression",
+      "VIEW_ANGLE": "side view",
+      "ACTION": "standing proud"
+    }
+  },
+  "character-mage": {
+    "name": "Mage Character",
+    "template": "mysterious mage, arcane robes, [STAFF], [ACCESSORY], magical aura, [VIEW_ANGLE], [ACTION]",
+    "variables": {
+      "STAFF": "wooden staff with glowing crystal",
+      "ACCESSORY": "hooded cloak, wise eyes",
+      "VIEW_ANGLE": "side view",
+      "ACTION": "channeling magic"
+    }
+  },
+  "character-rogue": {
+    "name": "Rogue Character",
+    "template": "stealthy rogue, [CLOTHING], [WEAPON], [ACCESSORY], [VIEW_ANGLE], [ACTION]",
+    "variables": {
+      "CLOTHING": "dark leather armor",
+      "WEAPON": "twin daggers",
+      "ACCESSORY": "hood up, mysterious expression",
+      "VIEW_ANGLE": "side view",
+      "ACTION": "ready to strike"
+    }
+  },
+  "character-ranger": {
+    "name": "Ranger Character",
+    "template": "skilled ranger, forest attire, [WEAPON], [ACCESSORY], [VIEW_ANGLE], [ACTION]",
+    "variables": {
+      "WEAPON": "longbow and quiver of arrows",
+      "ACCESSORY": "cloak with forest motifs, keen eyes",
+      "VIEW_ANGLE": "side view",
+      "ACTION": "aiming bow"
+    }
+  },
+  "boss-dragon": {
+    "name": "Dragon Boss",
+    "template": "fearsome dragon, massive wings, [SCALES], [EYES], breathing fire, [VIEW_ANGLE], [ACTION]",
+    "variables": {
+      "SCALES": "dark purple scales with gold underbelly",
+      "EYES": "glowing red eyes, fierce expression",
+      "VIEW_ANGLE": "3/4 view",
+      "ACTION": "spreading wings wide"
+    }
+  },
+  "boss-undead": {
+    "name": "Undead Boss",
+    "template": "terrifying undead lord, rotting armor, dark magic, [WEAPON], glowing eyes, [VIEW_ANGLE], [ACTION]",
+    "variables": {
+      "WEAPON": "rusted cursed sword",
+      "VIEW_ANGLE": "3/4 view",
+      "ACTION": "rising from grave"
+    }
+  },
+  "enemy-beast": {
+    "name": "Beast Enemy",
+    "template": "ferocious beast, [FUR], sharp claws, [EYES], [VIEW_ANGLE], [ACTION]",
+    "variables": {
+      "FUR": "matted dark fur",
+      "EYES": "yellow glowing eyes",
+      "VIEW_ANGLE": "side view",
+      "ACTION": "ready to pounce"
+    }
+  },
+  "enemy-insect": {
+    "name": "Insect Enemy",
+    "template": "large insect creature, chitinous exoskeleton, [ANTENNAE], multiple legs, [VIEW_ANGLE], [ACTION]",
+    "variables": {
+      "ANTENNAE": "sensing antennae",
+      "VIEW_ANGLE": "top-down view",
+      "ACTION": "scuttling forward"
+    }
+  },
+  "enemy-slime": {
+    "name": "Slime Enemy",
+    "template": "gelatinous slime creature, translucent [COLOR], bouncing form, [VIEW_ANGLE], [ACTION]",
+    "variables": {
+      "COLOR": "green slime with darker core",
+      "VIEW_ANGLE": "side view",
+      "ACTION": "oozing along"
+    }
+  },
+  "item-weapon": {
+    "name": "Weapon Item",
+    "template": "[WEAPON_TYPE], [MATERIAL], [DETAIL], clean pixel art, [VIEW_ANGLE], game sprite, [SIZE]",
+    "variables": {
+      "WEAPON_TYPE": "sword",
+      "MATERIAL": "steel blade, leather grip",
+      "DETAIL": "runes etched on blade",
+      "VIEW_ANGLE": "diagonal angle",
+      "SIZE": "64x64 pixel sprite"
+    }
+  },
+  "item-armor": {
+    "name": "Armor Item",
+    "template": "[ARMOR_TYPE], [MATERIAL], [DETAIL], clean pixel art, [VIEW_ANGLE], game sprite, [SIZE]",
+    "variables": {
+      "ARMOR_TYPE": "chestplate",
+      "MATERIAL": "iron with gold trim",
+      "DETAIL": "emblem on breastplate",
+      "VIEW_ANGLE": "front view",
+      "SIZE": "64x64 pixel sprite"
+    }
+  },
+  "item-potion": {
+    "name": "Potion Item",
+    "template": "[COLOR] potion in [BOTTLE_TYPE] bottle, [EFFECT] sparkles, clean pixel art, [VIEW_ANGLE], game sprite, [SIZE]",
+    "variables": {
+      "COLOR": "glowing blue",
+      "BOTTLE_TYPE": "glass flask",
+      "EFFECT": "bubbling",
+      "VIEW_ANGLE": "slight angle",
+      "SIZE": "32x32 pixel sprite"
+    }
+  },
+  "item-coin": {
+    "name": "Coin Item",
+    "template": "golden coin, [DETAIL], shiny [SHINE], clean pixel art, [VIEW_ANGLE], game sprite, [SIZE]",
+    "variables": {
+      "DETAIL": "embossed star emblem",
+      "SHINE": "bright highlight",
+      "VIEW_ANGLE": "front view",
+      "SIZE": "16x16 pixel sprite"
+    }
+  },
+  "env-dungeon": {
+    "name": "Dungeon Environment",
+    "template": "dungeon [ELEMENT], [MATERIAL], [LIGHTING], atmospheric, clean pixel art, top-down view, game tile",
+    "variables": {
+      "ELEMENT": "stone floor tile",
+      "MATERIAL": "cracked gray stone",
+      "LIGHTING": "dim torchlight casting shadows"
+    }
+  },
+  "env-forest": {
+    "name": "Forest Environment",
+    "template": "forest [ELEMENT], [MATERIAL], [DETAIL], lush atmosphere, clean pixel art, [VIEW_ANGLE], game tile",
+    "variables": {
+      "ELEMENT": "grass tile with flowers",
+      "MATERIAL": "green grass, brown earth",
+      "DETAIL": "small mushrooms and twigs",
+      "VIEW_ANGLE": "top-down view"
+    }
+  },
+  "env-water": {
+    "name": "Water Environment",
+    "template": "[WATER_TYPE], [COLOR], clean pixel art, [VIEW_ANGLE], game tile",
+    "variables": {
+      "WATER_TYPE": "shallow stream water",
+      "COLOR": "clear blue with white foam",
+      "VIEW_ANGLE": "top-down view"
+    }
+  },
+  "npc-villager": {
+    "name": "Villager NPC",
+    "template": "[GENDER] villager, simple [CLOTHING], [HAIR], friendly expression, [VIEW_ANGLE], [ACTION], clean pixel art, game sprite",
+    "variables": {
+      "GENDER": "male",
+      "CLOTHING": "brown tunic and pants",
+      "HAIR": "short brown hair",
+      "VIEW_ANGLE": "front view",
+      "ACTION": "standing idle"
+    }
+  },
+  "npc-merchant": {
+    "name": "Merchant NPC",
+    "template": "friendly merchant, [CLOTHING], [ACCESSORY], wares displayed, [VIEW_ANGLE], [ACTION], clean pixel art, game sprite",
+    "variables": {
+      "CLOTHING": "colorful robes",
+      "ACCESSORY": "large hat, coin pouch at belt",
+      "VIEW_ANGLE": "front view",
+      "ACTION": "standing behind counter"
+    }
+  }
+}
