@@ -8,9 +8,10 @@ from flask import Flask, request, jsonify, render_template, send_file
 
 from generator import (
     load_config, generate_frame, pixelate_image,
-    save_frames, ACTION_PROMPTS
+    save_frames,
 )
-from assembler import assemble_spritesheet, generate_gif_pil
+from prompt_builder import ACTION_PROMPTS
+from assembler import assemble_spritesheet, generate_gif
 
 app = Flask(__name__, template_folder="templates")
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
@@ -338,7 +339,7 @@ def generate():
         print(f"Sprite sheet: {result['sheet_path']}")
 
         gif_path = OUTPUT_DIR / f"{output_name}.gif"
-        gif_result = generate_gif_pil(
+        gif_result = generate_gif(
             [str(Path(p)) for p in frame_paths],
             str(gif_path),
             delay=100,
@@ -498,7 +499,7 @@ def rebuild_sheet():
     )
 
     gif_path = OUTPUT_DIR / f"{output_name}.gif"
-    gif_result = generate_gif_pil(frame_paths, str(gif_path), delay=100)
+    gif_result = generate_gif(frame_paths, str(gif_path), delay=100)
 
     return jsonify({
         "status": "ok",

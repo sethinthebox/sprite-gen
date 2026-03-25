@@ -1,94 +1,216 @@
-# Sprite Generator — SPEC
+# Sprite Generator — Specification
 
 ## Concept & Vision
 
-A local web UI that generates pixel art sprite sheets from text prompts, mirroring spritegenerator.online. 
-Sends prompts to a cloud AI API (DeepInfra/Flux), then assembles the resulting frames into a sprite sheet + JSON metadata using Aseprite CLI. All orchestration and UI is local Python.
+A local-first pixel art sprite sheet generator for game developers.
+Type a character description, pick actions, and get a game-ready sprite sheet
+with style consistency across generations. Cloud API handles image generation;
+everything else runs locally with no GPU required.
 
-**Philosophy:** Fast iteration, no GPU required, pay-per-image at ~$0.0005/sprite.
+**Design goal:** Spend $0.01 generating sprites, not $50/month on software licenses.
+
+---
 
 ## Architecture
 
 ```
 sprite-gen/
-├── SPEC.md
-├── app.py              # Flask web UI
-├── generator.py         # Core generation logic
-├── assembler.py         # Aseprite CLI sprite sheet assembly
-├── config.json         # API keys, paths
-├── templates/
-│   └── index.html      # Web UI
-├── output/             # Generated sprites
-└── frames/             # Temp frame storage
+├── app.py                  Flask web UI (HTTP API + serving)
+├── generator.py            DeepInfra API client + pixelation
+├── assembler.py            Sprite sheet PNG + JSON + GIF assembly
+├── prompt_builder.py       Prompt construction + action poses + quality scoring
+├── style.py                Style guide load/save/validate
+├── reference.py            Reference image palette extraction
+├── consistency.py          Style consistency engine ("same character but...")
+├── generation.py           High-level pipeline + generation log
+│
+├── defaults/
+│   ├── style-guide-default.json    Default "Classic Pixel RPG" style
+│   └── prompt-templates.json       18 archetype templates
+│
+├── reference-library/       Uploaded reference sprites
+├── output/                  Generated sprite sheets
+├── frames/                  Per-frame PNGs (temp)
+├── style-guide.json         Active style guide
+├── generation-log.jsonl     Generation history (append-only JSONL)
+├── config.json              API keys + settings (not committed)
+└── config.example.json      Template for config.json
 ```
+
+### Dependency graph
+
+```
+app.py
+  ├── generator.py           (API + pixelation)
+  ├── assembler.py           (PNG/JSON/GIF assembly)
+  │     └── PIL/Pillow
+  ├── prompt_builder.py      (ACTION_PROMPTS, build_full_prompt, quality scoring)
+  │     ├── style.py         (get_style_keywords)
+  │     └── reference.py     (get_reference → palette hints)
+  ├── style.py
+  ├── reference.py
+  ├── consistency.py
+  │     ├── style.py
+  │     └── reference.py
+  └── generation.py          (orchestration layer)
+        ├── generator.py
+        ├── assembler.py
+        ├── prompt_builder.py
+        ├── style.py
+        └── consistency.py
+```
+
+**Key rule:** `generator.py` knows nothing about prompts.
+`prompt_builder.py` knows nothing about APIs.
+
+---
 
 ## Data Flow
 
-1. User submits prompt + settings (grid size, actions, size)
-2. For each frame needed: POST to DeepInfra API → receive PNG
-3. Save frames to `frames/` directory
-4. Run Aseprite CLI to assemble sprite sheet + JSON
-5. Offer download of sprite sheet + JSON + individual frames
-6. (Optional) Run pixel-art reduction pass
+```
+User prompt + settings
+       │
+       ▼
+prompt_builder.py          ← builds full prompt with style + action + reference
+       │
+       ▼
+generator.py              ← sends to DeepInfra, receives PNG bytes
+       │
+       ▼
+pixelate_image()          ← resize to sprite size, sharpen
+       │
+       ▼
+assembler.py              ← lay out frames → sprite sheet PNG + JSON
+       │
+       ▼
+generate_gif()            ← optional animated GIF preview
+       │
+       ▼
+generation-log.jsonl      ← record what was generated
+```
 
-## API Design
-
-### Web UI
-- `GET /` — Serve the web UI
-- `POST /generate` — Generate sprite sheet
-  - Body: `{prompt, grid_size, sprite_size, actions}`
-  - Response: `{status, output_files: [...]}`
-- `GET /output/<filename>` — Download generated file
-
-### Generation API (internal)
-- `generate_frames(prompt, count, size)` → list of PNG bytes
-- `assemble_spritesheet(frame_paths, grid_size, output_path)` → sprite sheet + JSON
+---
 
 ## Image Generation
 
-**Provider:** DeepInfra (OpenAI-compatible API)
-**Model:** `black-forest-labs/FLUX-1-schnell` (fast, cheap)
-**Settings:**
-- Size: 512×512 (then crop/resize to sprite pixel size)
-- Steps: 4 (schnell is fast at low steps)
-- Prompt enhancement: append "pixel art, game sprite, transparent background, clean lines"
+| | |
+|---|---|
+| **Provider** | DeepInfra (OpenAI-compatible API) |
+| **Model** | `black-forest-labs/FLUX-1-schnell` |
+| **Cost** | ~$0.0005/frame (512×512, 4 steps) |
+| **API size** | 512×512 (then pixelated down to sprite size) |
+| **Pixelation** | PIL `NEAREST` resize + `SHARPEN` filter |
 
-**Pixel art conversion:**
-After generation, use PIL to:
-1. Resize to sprite pixel size (e.g., 64×64)
-2. Reduce colors to a game-appropriate palette
-3. Apply slight sharpen
+---
 
-## Sprite Sheet Assembly
+## Sprite Sheet Format
 
-Use Aseprite CLI:
+Output PNG is a grid of N×N frames. JSON metadata uses Aseprite-compatible format:
+
+```json
+{
+  "frames": {
+    "frame_000.png": {
+      "frame": {"x": 0, "y": 0, "w": 64, "h": 64},
+      "sourceSize": {"w": 64, "h": 64},
+      "duration": 100
+    }
+  },
+  "meta": {
+    "image": "sheet.png",
+    "size": {"w": 256, "h": 256},
+    "format": "RGBA8888"
+  }
+}
 ```
-aseprite -b --sheet sheet.png --data sheet.json \
-  --sheet-type rows \
-  --filename-format "{frame}" \
-  frame1.png frame2.png ...
+
+Import directly into Unity, Godot, Aseprite, or any engine with sprite sheet support.
+
+---
+
+## Style Guide System
+
+A style guide is a JSON file that defines your project's visual contract:
+
+```json
+{
+  "name": "Dark Fantasy RPG",
+  "version": "1.0",
+  "palette": {
+    "primary": "#4a6741",
+    "secondary": "#8b7355",
+    "accent": "#d4a574",
+    "background": "#1a1a2e"
+  },
+  "art_style": {
+    "outline": "1px",
+    "shading": "flat",
+    "dithering": "none"
+  },
+  "constraints": {
+    "max_colors_per_sprite": 24,
+    "transparent_bg": true
+  },
+  "keywords": {
+    "always_include": ["clean pixel art", "game sprite"],
+    "never_include": ["photorealistic", "3d render"]
+  }
+}
 ```
 
-## UI Design
+Set once in **Settings → Style Guide** → every generation automatically includes it.
 
-Simple, single-page:
-- Prompt textarea (with example)
-- Grid size selector (2×2, 3×3, 4×4, 5×5, 6×6)
-- Sprite size selector (16, 32, 64, 128 px)
-- Actions multiselect: Idle, Walk, Run, Attack, Cast, Jump, Dance, Death, Dodge
-- "Generate" button → shows progress
-- Output: preview of sprite sheet + download buttons
+---
 
-## Pricing Estimate
+## Reference Image System
 
-Per frame (512×512, FLUX-1-schnell, 4 steps):
-- $0.0005 × (512/1024)² × 4 = ~$0.0005
-- 16 frames = $0.008 (0.8 cents)
+Upload a sprite you're happy with:
+
+1. The system extracts its **dominant palette** (8 colors)
+2. Extracts **style hints** — brightness, edge variance, pixel density
+3. All future generations using this reference get color hints prepended
+
+Workflow: *"Generate → find the best frame → upload as reference → generate variations"*
+
+---
+
+## Consistency Engine
+
+The `consistency.py` module enables **"same character, new pose"** generation:
+
+- `detect_character_components()` — parses a prompt into structured parts (subject, clothing, accessories, pose, view angle)
+- `apply_modifications()` — handles "same character but with [X]" transformations
+- `build_variation_prompt()` — scaffold prompts for pose/view/accessory variations
+- `style_distance()` — measure how stylistically similar two prompts are (0.0 = identical, 1.0 = completely different)
+
+---
+
+## API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/` | Web UI |
+| `POST` | `/generate` | Generate sprite sheet |
+| `POST` | `/regenerate-frame` | Regenerate single frame |
+| `POST` | `/rebuild-sheet` | Rebuild sheet from existing frames |
+| `GET/POST` | `/config` | Get/update API key + settings |
+| `GET/POST` | `/style-guide` | Get/update active style guide |
+| `GET` | `/templates` | List prompt templates |
+| `POST` | `/upload-reference` | Upload reference image |
+| `GET` | `/references` | List reference library |
+| `DELETE` | `/reference/<id>` | Delete reference |
+| `GET` | `/generation-log` | Fetch generation history |
+| `GET` | `/actions` | List available actions |
+| `GET` | `/output/<filename>` | Download output file |
+| `GET` | `/frames/<filename>` | Download individual frame |
+
+---
 
 ## Design Decisions
 
-1. **Flask over nothing** — simple HTTP server, no JS framework needed
-2. **DeepInfra over OpenAI** — 10x cheaper, same API format
-3. **Aseprite for assembly** — proven CLI, handles PNG→sprite sheet cleanly
-4. **PIL for pixel art conversion** — resize + palette reduction
-5. **frames/ as temp** — cleanup after each generation
+1. **PIL over Aseprite CLI** — no external GUI tool dependency, runs on any OS
+2. **DeepInfra over OpenAI** — ~10× cheaper, same API shape
+3. **JSONL for logging** — append-only, human-readable, trivially filterable with `grep`
+4. **Style guide as JSON** — lets you version-control your project's visual contract
+5. **`ACTION_PROMPTS` in one place** — `prompt_builder.py`; everything else imports from there
+6. **`reference.py` for all reference operations** — palette extraction, metadata, CRUD; `consistency.py` consumes it

@@ -1,19 +1,27 @@
-"""Smart prompt construction — builds optimized prompts from components."""
+"""Smart prompt construction — builds optimized prompts from components.
+
+Single source of truth for:
+    - ACTION_PROMPTS: pose descriptions per action (size-aware)
+    - Prompt assembly: base + action + style + reference + template
+    - Ollama improvements: refine prompts with local LLM
+    - Quality scoring: evaluate prompt completeness before generation
+    - Template system: reusable partial prompts per archetype
+"""
 
 import json
-import re
 import requests
 from pathlib import Path
-from typing import Optional, List, Dict
+from typing import Optional, List
 
 from style import get_style_keywords
 from reference import get_reference
 
 
-DEFAULT_TEMPLATES_PATH = Path(__file__).parent / "defaults" / "prompt-templates.json"
+DEFAULT_TEMPLATES_DIR = Path(__file__).parent / "defaults"
+DEFAULT_STYLE_GUIDE = DEFAULT_TEMPLATES_DIR / "style-guide-default.json"
 
-
-# Action pose descriptions — per sprite size
+# ── Action poses ────────────────────────────────────────────────────────────────
+# Size-aware: "small" for sprites < 64px, "large" for 64px+
 ACTION_PROMPTS = {
     "idle": {
         "small": "standing idle, neutral stance, subtle breathing",
@@ -24,8 +32,8 @@ ACTION_PROMPTS = {
         "large": "walking animation frame, one foot forward, arms swinging naturally, mid-stride pose",
     },
     "run": {
-        "small": "running, fast motion blur suggestion",
-        "large": "running at full speed, legs extended, arms pumping, dynamic forward lean, motion frame",
+        "small": "running, fast motion",
+        "large": "running at full speed, legs extended, arms pumping, dynamic forward lean, peak action frame",
     },
     "attack": {
         "small": "attacking, weapon extended",
@@ -52,119 +60,131 @@ ACTION_PROMPTS = {
         "large": "dodging, quick evasive movement, body angled sharply to side, quick reaction pose",
     },
     "hurt": {
-        "small": "injured, recoiling, pain expression",
+        "small": "injured, recoiling",
         "large": "injured and recoiling, clutching wound, grimacing in pain, knocked back pose",
     },
     "block": {
         "small": "blocking, defensive stance, weapon raised",
         "large": "blocking with weapon, defensive stance, shield or weapon raised high, protective pose",
     },
+    "custom": {
+        "small": "dynamic custom pose",
+        "large": "dynamic custom pose, detailed action",
+    },
 }
 
+DEFAULT_ACTIONS = ["idle", "walk", "run", "attack"]
 
-def _load_templates() -> dict:
-    """Load prompt templates from JSON."""
-    if not DEFAULT_TEMPLATES_PATH.exists():
-        return {}
-    with open(DEFAULT_TEMPLATES_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
 
+# ── Prompt building ─────────────────────────────────────────────────────────────
 
 def build_full_prompt(
     base_description: str,
     options: Optional[dict] = None,
 ) -> str:
-    """Build a complete, optimized prompt from components.
+    """Assemble a complete generation prompt from components.
+
+    Build order:
+        1. Base description
+        2. View angle (if specified)
+        3. Reference palette colors (if a reference is set)
+        4. Style guide keywords
+        5. Seed consistency string (if continuing a series)
 
     Args:
-        base_description: Core character/object description
-        options: dict with keys:
-            - actions: list of action strings (e.g. ["idle", "walk"])
-            - style_guide: style guide dict
-            - reference_id: reference image ID for palette hints
-            - seed_prompt: a previous prompt to maintain consistency with
-            - view_angle: preferred view angle (e.g. "side view")
-            - size_hint: sprite size hint for detail level
+        base_description: Core character/object description.
+        options: Dict with keys:
+            - ``view_angle``: e.g. "side view", "front view"
+            - ``reference_id``: reference image ID for palette hints
+            - ``style_guide``: style guide dict
+            - ``seed_prompt``: previous prompt to match style with
 
     Returns:
-        Full optimized prompt string
+        Comma-separated prompt string, ready to send to the API.
     """
     if options is None:
         options = {}
 
-    parts = []
+    parts = [base_description]
 
-    # Start with base description
-    parts.append(base_description)
+    if options.get("view_angle"):
+        parts.append(options["view_angle"])
 
-    # Add view angle if specified
-    view_angle = options.get("view_angle")
-    if view_angle:
-        parts.append(view_angle)
-
-    # Add reference palette colors if available
-    reference_id = options.get("reference_id")
-    if reference_id:
-        ref = get_reference(reference_id)
+    if options.get("reference_id"):
+        ref = get_reference(options["reference_id"])
         if ref and ref.get("palette"):
-            palette = ref["palette"]
-            # Pick a representative subset
-            palette_str = ", ".join(palette[:4])
+            palette_str = ", ".join(ref["palette"][:4])
             parts.append(f"colors: {palette_str}")
 
-    # Add style guide keywords
-    style_guide = options.get("style_guide")
-    if style_guide:
-        keywords = get_style_keywords(style_guide)
+    if options.get("style_guide"):
+        keywords = get_style_keywords(options["style_guide"])
         if keywords:
             parts.append(keywords)
 
-    # Add seed prompt consistency if provided
-    seed_prompt = options.get("seed_prompt")
-    if seed_prompt:
-        # Extract only the style-relevant parts from seed
-        parts.append(f"style match: {seed_prompt}")
+    if options.get("seed_prompt"):
+        parts.append(f"style match: {options['seed_prompt']}")
 
     return ", ".join(parts)
 
 
 def build_action_prompt(action: str, sprite_size: int) -> str:
-    """Build a pose description for a specific action.
+    """Get the pose description for an action, scaled to sprite size.
 
-    Uses more detailed descriptions for larger sprites.
+    Larger sprites (64+) get more detailed pose descriptions to take
+    advantage of the additional pixel resolution.
+
+    Args:
+        action: Action name (e.g. "idle", "walk", "attack").
+        sprite_size: Sprite pixel size (e.g. 64).
+
+    Returns:
+        Pose description string to append to a prompt.
     """
-    if action == "custom":
-        return "dynamic custom pose, detailed action"
-
-    action_lower = action.lower()
-    if action_lower not in ACTION_PROMPTS:
-        return f"{action_lower} pose"
+    action_key = action.lower()
+    if action_key not in ACTION_PROMPTS:
+        return f"{action_key} pose"
 
     size_key = "large" if sprite_size >= 64 else "small"
-    return ACTION_PROMPTS[action_lower][size_key]
+    return ACTION_PROMPTS[action_key][size_key]
 
 
-def suggest_improvements(prompt: str, ollama_url: str = "http://localhost:11434") -> str:
-    """Use Ollama to analyze and improve a pixel art prompt.
+# ── Ollama improvements ─────────────────────────────────────────────────────────
 
-    Returns the improved prompt, or the original if Ollama is unavailable.
+def suggest_improvements(
+    prompt: str,
+    ollama_url: str = "http://localhost:11434",
+    model: str = "llama3.2",
+) -> str:
+    """Use Ollama to refine a prompt for better pixel art results.
+
+    Sends the prompt to a local Ollama instance and asks it to
+    improve specificity, add game-sprite keywords, and include
+    view angle and style details.
+
+    Args:
+        prompt: The raw user prompt to improve.
+        ollama_url: Ollama API base URL.
+        model: Model name to use.
+
+    Returns:
+        The improved prompt, or the original if Ollama is unavailable.
     """
-    improvement_prompt = (
-        'You are a pixel art game sprite prompt expert. '
-        'Improve this prompt for better generation results. '
-        'Make it more specific, add game sprite keywords, '
-        'include view angle and style details. '
-        'Keep it concise (under 200 characters). '
-        'Return ONLY the improved prompt, nothing else.\n\n'
-        f'Original prompt: {prompt}'
+    system = (
+        "You are a pixel art game sprite prompt expert. "
+        "Improve this prompt for better generation results. "
+        "Make it more specific, add game sprite keywords, "
+        "include view angle and style details. "
+        "Keep it concise (under 200 characters). "
+        "Return ONLY the improved prompt text, nothing else. "
+        "Do not wrap it in quotes or add explanation."
     )
 
     try:
         response = requests.post(
             f"{ollama_url}/api/generate",
             json={
-                "model": "llama3.2",
-                "prompt": improvement_prompt,
+                "model": model,
+                "prompt": f"{system}\n\nPrompt: {prompt}",
                 "stream": False,
                 "options": {"temperature": 0.3, "num_predict": 200},
             },
@@ -172,111 +192,135 @@ def suggest_improvements(prompt: str, ollama_url: str = "http://localhost:11434"
         )
         if response.status_code == 200:
             result = response.json()
-            improved = result.get("response", "").strip()
-            # Validate it's not empty and not too long
-            if improved and len(improved) < 500 and len(improved) > 5:
+            improved = result.get("response", "").strip().strip('"')
+            if improved and 5 < len(improved) < 500:
                 return improved
     except Exception:
         pass
 
-    # Fallback: return original
     return prompt
 
 
-def estimate_quality(prompt: str, style_guide: Optional[dict] = None) -> int:
-    """Estimate prompt quality for pixel art sprite generation.
+# ── Quality scoring ─────────────────────────────────────────────────────────────
 
-    Returns a score 0-100 based on presence of key quality indicators.
+def estimate_quality(
+    prompt: str,
+    style_guide: Optional[dict] = None,
+) -> int:
+    """Score a prompt 0–100 on completeness for pixel art generation.
+
+    Scoring:
+        +30  Has "pixel art" or "game sprite" keyword
+        +20  Has style keywords from the art_style block
+        +15  Has color specifications
+        +10  Has a view angle
+        +10  Has an action/pose
+        −50  Missing "pixel" or "sprite" entirely
+        −30  Vague ("a character", "some person")
+        −20  Too short (< 20 characters)
+
+    Args:
+        prompt: The prompt to score.
+        style_guide: Optional style guide dict for style keyword matching.
+
+    Returns:
+        Integer score 0–100.
     """
     score = 0
-    prompt_lower = prompt.lower()
+    p = prompt.lower()
 
-    # Has pixel art / game sprite keywords: +30
-    pixel_keywords = ["pixel art", "game sprite", "pixel art style", "pixel art game"]
-    if any(kw in prompt_lower for kw in pixel_keywords):
+    # Positive indicators
+    if any(kw in p for kw in ["pixel art", "game sprite", "pixel art style"]):
         score += 30
-
-    # Has style keywords from art_style: +20
-    if style_guide and "art_style" in style_guide:
-        art = style_guide["art_style"]
-        art_keywords = [
-            art.get("shading", ""),
-            art.get("outline", ""),
-            art.get("dithering", ""),
-        ]
-        for kw in art_keywords:
-            if kw and kw != "none" and kw in prompt_lower:
-                score += 7
-        if score > 20:
-            score = min(score, 20)
-
-    # Has color specifications: +15
-    color_indicators = ["color", "colors", "palette", "red", "blue", "green", "golden", "dark", "light"]
-    if any(ind in prompt_lower for ind in color_indicators):
+    if any(kw in p for kw in ["color", "red", "blue", "green", "golden", "dark", "light", "palette"]):
         score += 15
-
-    # Has view angle: +10
-    view_angles = ["front view", "side view", "3/4 view", "back view", "top-down", "isometric"]
-    if any(va in prompt_lower for va in view_angles):
+    if any(va in p for va in ["front view", "side view", "3/4 view", "back view", "top-down", "isometric"]):
+        score += 10
+    if any(a in p for a in ["idle", "walk", "run", "attack", "cast", "jump", "dance", "death", "dodge", "hurt", "block"]):
         score += 10
 
-    # Has action/pose: +10
-    action_words = ["idle", "walk", "run", "attack", "cast", "jump", "dance", "death", "dodge", "hurt", "block"]
-    if any(a in prompt_lower for a in action_words):
-        score += 10
+    # Style guide keyword match
+    if style_guide and "art_style" in style_guide:
+        art_keywords = [
+            style_guide["art_style"].get("shading", ""),
+            style_guide["art_style"].get("outline", ""),
+            style_guide["art_style"].get("dithering", ""),
+        ]
+        matches = sum(1 for kw in art_keywords if kw and kw != "none" and kw in p)
+        score += min(matches * 7, 20)
 
-    # Missing "pixel art": -50
-    if "pixel" not in prompt_lower and "sprite" not in prompt_lower:
+    # Penalties
+    if "pixel" not in p and "sprite" not in p:
         score -= 50
-
-    # Vague description ("a character", "some person"): -30
-    vague_phrases = ["a character", "some character", "a person", "a figure", "a sprite", "thing", "creature"]
-    if any(phrase in prompt_lower for phrase in vague_phrases):
+    if any(phrase in p for phrase in ["a character", "some character", "a person", "a figure", "thing"]):
         score -= 30
-
-    # Too short (< 20 chars): -20
     if len(prompt) < 20:
         score -= 20
 
     return max(0, min(100, score))
 
 
+# ── Template system ─────────────────────────────────────────────────────────────
+
+def _load_templates() -> dict:
+    """Load all templates from defaults/prompt-templates.json."""
+    path = DEFAULT_TEMPLATES_DIR / "prompt-templates.json"
+    if not path.exists():
+        return {}
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
 def apply_template(
-    template_name: str,
+    name: str,
     variables: Optional[dict] = None,
     base_overrides: Optional[dict] = None,
 ) -> str:
-    """Apply a named prompt template with variable substitution.
+    """Apply a named template with variable substitution.
 
-    Templates are stored in defaults/prompt-templates.json.
+    Templates live in ``defaults/prompt-templates.json`` and look like::
+
+        {
+          "Character - Warrior": {
+            "template": "[SUBJECT], battle-worn [CLOTHING], [WEAPON], [ACCESSORY], [VIEW_ANGLE]",
+            "variables": {
+              "SUBJECT": "fierce warrior",
+              "CLOTHING": "plate armor",
+              "WEAPON": "sword and shield",
+              "ACCESSORY": "battle scars",
+              "VIEW_ANGLE": "side view"
+            }
+          }
+        }
+
+    Args:
+        name: Template name (key in prompt-templates.json).
+        variables: Override values for ``[PLACEHOLDER]`` tokens.
+        base_overrides: Additional overrides merged after ``variables``.
+
+    Returns:
+        The filled-in prompt string.
+
+    Raises:
+        ValueError: If the template name is not found.
     """
     templates = _load_templates()
+    if name not in templates:
+        raise ValueError(f"Unknown template: {name}. Available: {list(templates.keys())}")
 
-    if template_name not in templates:
-        raise ValueError(f"Unknown template: {template_name}. Available: {list(templates.keys())}")
+    template = templates[name]
+    variables = {**template.get("variables", {}), **(variables or {})}
+    result = template.get("template", template.get("partial", ""))
 
-    template = templates[template_name]
-    template_str = template.get("template", "")
-
-    # Merge variables (template defaults + provided overrides)
-    all_vars = {**template.get("variables", {}), **(variables or {})}
-
-    # Replace placeholders like [CLOTHING] with values
-    result = template_str
-    for key, value in all_vars.items():
-        placeholder = f"[{key}]"
-        result = result.replace(placeholder, str(value))
-
-    # Apply any base overrides (e.g., change VIEW_ANGLE)
+    for key, value in variables.items():
+        result = result.replace(f"[{key}]", str(value))
     if base_overrides:
         for key, value in base_overrides.items():
-            placeholder = f"[{key}]"
-            result = result.replace(placeholder, str(value))
+            result = result.replace(f"[{key}]", str(value))
 
     return result
 
 
 def list_templates() -> List[str]:
-    """List all available prompt template names."""
-    templates = _load_templates()
-    return list(templates.keys())
+    """Return names of all available templates."""
+    return list(_load_templates().keys())

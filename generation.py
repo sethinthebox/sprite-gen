@@ -14,11 +14,10 @@ from prompt_builder import build_full_prompt, build_action_prompt, estimate_qual
 from generator import (
     generate_frame,
     pixelate_image,
-    generate_sprite_frames,
     save_frames,
     load_config,
-    ACTION_PROMPTS,
 )
+from prompt_builder import ACTION_PROMPTS
 from assembler import assemble_spritesheet
 
 
