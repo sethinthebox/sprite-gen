@@ -12,7 +12,7 @@ import json
 import time
 import requests
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 from PIL import Image, ImageFilter
 
