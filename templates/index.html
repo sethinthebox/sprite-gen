@@ -530,6 +530,75 @@ input[type="range"] {
   .settings-grid { grid-template-columns: 1fr; }
   .template-grid { grid-template-columns: 1fr; }
 }
+
+/* ─── Row-based sheet UI ──────────────────────────────────────────────────── */
+.actions-checklist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+.action-check {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 5px 10px;
+  font-size: 0.8em;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: var(--transition);
+  user-select: none;
+}
+.action-check:hover { border-color: var(--accent); color: var(--text); }
+.action-check input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; }
+.action-check:has(input:checked) { background: var(--accent-glow); border-color: var(--accent); color: var(--accent); }
+
+/* Sheet preview with row labels */
+.sheet-with-labels {
+  display: flex;
+  gap: 0;
+  align-items: flex-start;
+}
+.row-labels {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding-top: 1px;
+}
+.row-label {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 8px;
+  font-size: 0.72em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  min-width: 44px;
+}
+
+/* Frames by action row */
+.action-row-section {
+  margin-bottom: 14px;
+}
+.action-row-heading {
+  font-size: 0.75em;
+  font-weight: 600;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+}
+.action-frame-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
 </style>
 </head>
 <body>
@@ -593,43 +662,44 @@ input[type="range"] {
 
     <!-- Generate Tab -->
     <div id="tab-generate">
-      <div class="panel">
+
+      <!-- New Row-Based Form -->
+      <div class="panel" id="gen-form-panel">
         <div class="panel-title">Character / Sprite Description</div>
-        <textarea id="prompt" placeholder="e.g. isometric pixel art businessman, pristine navy suit..." style="min-height:90px;">isometric pixel art businessman, pristine navy suit, white shirt, red tie, polished shoes, holding a briefcase, front facing, clean retro style, transparent background</textarea>
+        <textarea id="base_character" placeholder="isometric pixel art older businessman, late 50s, gray temples, navy suit, red tie..." style="min-height:90px;">isometric pixel art older businessman, late 50s, gray temples, salt and pepper hair, pristine navy suit, white shirt, red tie, polished shoes, holding briefcase</textarea>
       </div>
 
       <div class="panel">
-        <div class="panel-title">Layout & Animation</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
-          <div>
-            <label>Grid Size</label>
-            <select id="grid_size">
-              <option value="2">2×2 (4 frames)</option>
-              <option value="3">3×3 (9 frames)</option>
-              <option value="4" selected>4×4 (16 frames)</option>
-              <option value="5">5×5 (25 frames)</option>
-              <option value="6">6×6 (36 frames)</option>
-            </select>
-          </div>
+        <div class="panel-title">Actions (one row per action, 4 frames each)</div>
+        <div class="actions-checklist" id="actions-checklist">
+          <label class="action-check"><input type="checkbox" value="idle" checked> idle</label>
+          <label class="action-check"><input type="checkbox" value="walk" checked> walk</label>
+          <label class="action-check"><input type="checkbox" value="run" checked> run</label>
+          <label class="action-check"><input type="checkbox" value="jump"> jump</label>
+          <label class="action-check"><input type="checkbox" value="hurt"> hurt</label>
+          <label class="action-check"><input type="checkbox" value="die"> die</label>
+        </div>
+        <p class="input-hint">Checked actions become rows. Each row = 4 animation frames.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
           <div>
             <label>Sprite Size (px)</label>
             <select id="sprite_size">
-              <option value="16">16×16</option>
               <option value="32">32×32</option>
+              <option value="48">48×48</option>
               <option value="64" selected>64×64</option>
+              <option value="96">96×96</option>
               <option value="128">128×128</option>
             </select>
           </div>
-        </div>
-        <div>
-          <label>Animation Actions</label>
-          <div class="actions-grid" id="actions-grid"></div>
-          <p class="input-hint">Actions cycle across frames. With 4×4 + idle+walk+run+attack = 16 frames (4 each).</p>
+          <div>
+            <label>Style Keywords (optional)</label>
+            <input type="text" id="style_suffix" placeholder="retro pixel art, no background, transparent PNG">
+          </div>
         </div>
       </div>
 
       <button class="btn-generate" id="generate-btn" onclick="generate()">
-        <span>✨</span> Generate Sprite Sheet
+        <span>✨</span> Generate Full Sheet
       </button>
 
       <!-- Progress -->
@@ -647,23 +717,17 @@ input[type="range"] {
       <!-- Output -->
       <div class="output-section" id="output-section">
 
-        <!-- Frame Grid -->
-        <div class="panel">
-          <div class="section-header">
-            <div class="section-title">Individual Frames</div>
-            <button class="download-btn" onclick="downloadSelectedFrames()">⬇ Download Selected</button>
-          </div>
-          <div class="frame-grid" id="frame-grid"></div>
-        </div>
-
-        <!-- Sprite Sheet Preview -->
+        <!-- Sheet preview with row labels -->
         <div class="panel sheet-preview" id="sheet-preview-wrap">
-          <div class="section-title">Sprite Sheet</div>
-          <img id="sheet-preview-img" src="" alt="Sprite Sheet">
+          <div class="section-title">Sprite Sheet <span id="sheet-meta" style="font-weight:normal;color:var(--text-dim)"></span></div>
+          <div class="sheet-with-labels">
+            <div class="row-labels" id="row-labels"></div>
+            <img id="sheet-preview-img" src="" alt="Sprite Sheet">
+          </div>
           <div class="download-row">
             <a class="download-btn primary" id="dl-sheet" href="">Download Sheet PNG</a>
-            <a class="download-btn" id="dl-json" href="">Download JSON</a>
-            <a class="download-btn" id="dl-frames" href="">Download All Frames</a>
+            <a class="download-btn" id="dl-metadata" href="">Download JSON</a>
+            <a class="download-btn" id="dl-gif" href="">Download GIF</a>
           </div>
         </div>
 
@@ -671,7 +735,14 @@ input[type="range"] {
         <div class="panel gif-preview" id="gif-preview-wrap" style="display:none;">
           <div class="section-title">Animation Preview</div>
           <img id="gif-preview-img" src="" alt="Animation">
-          <a class="download-btn primary" id="dl-gif" href="">Download GIF</a>
+        </div>
+
+        <!-- Frame grid organized by action row -->
+        <div class="panel" id="frames-by-action">
+          <div class="section-header">
+            <div class="section-title">All Frames</div>
+          </div>
+          <div id="frames-by-action-list"></div>
         </div>
 
       </div>
@@ -744,21 +815,15 @@ input[type="range"] {
 <script>
 // ─── State ────────────────────────────────────────────────────────────────────
 const state = {
-  selectedActions: new Set(['idle']),
-  selectedRef: null,        // { reference_id, filename }
-  selectedTemplate: null,   // template name string
-  selectedFrames: new Set(),
   currentOutputName: null,
-  currentFrames: [],        // [{url, action}]
-  stylePresets: {},         // { name: style_string }
+  currentFrames: [],        // [{url, action, index}]
+  actionsConfig: [],        // [{name, frames: [indices]}]
+  stylePresets: {},
   currentStyle: '',
 };
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 (async function init() {
-  // Load actions
-  await loadActions();
-
   // Load style guide + presets
   await loadStyleGuide();
 
@@ -787,36 +852,6 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (tab === 'log') loadGenLog();
   });
 });
-
-// ─── Actions ───────────────────────────────────────────────────────────────────
-async function loadActions() {
-  try {
-    const res = await fetch('/actions');
-    const data = await res.json();
-    const grid = document.getElementById('actions-grid');
-    grid.innerHTML = '';
-    (data.actions || []).forEach(action => {
-      const btn = document.createElement('button');
-      btn.className = 'action-btn' + (state.selectedActions.has(action) ? ' active' : '');
-      btn.dataset.action = action;
-      btn.textContent = action.charAt(0).toUpperCase() + action.slice(1);
-      btn.addEventListener('click', () => toggleAction(action, btn));
-      grid.appendChild(btn);
-    });
-  } catch (e) { console.warn('Failed to load actions', e); }
-}
-
-function toggleAction(action, btn) {
-  if (state.selectedActions.has(action)) {
-    if (state.selectedActions.size > 1) {
-      state.selectedActions.delete(action);
-      btn.classList.remove('active');
-    }
-  } else {
-    state.selectedActions.add(action);
-    btn.classList.add('active');
-  }
-}
 
 // ─── Style Guide ───────────────────────────────────────────────────────────────
 async function loadStyleGuide() {
@@ -1083,8 +1118,18 @@ async function clearGenLog() {
 // ─── Generate ─────────────────────────────────────────────────────────────────
 async function generate() {
   const btn = document.getElementById('generate-btn');
-  const prompt = document.getElementById('prompt').value.trim();
-  if (!prompt) { showError('Please enter a character description.'); return; }
+  const baseCharacter = document.getElementById('base_character').value.trim();
+  if (!baseCharacter) { showError('Please enter a character description.'); return; }
+
+  // Gather checked actions
+  const checkedActions = [];
+  document.querySelectorAll('#actions-checklist input[type="checkbox"]:checked').forEach(cb => {
+    checkedActions.push(cb.value);
+  });
+  if (!checkedActions.length) { showError('Select at least one action.'); return; }
+
+  const spriteSize = parseInt(document.getElementById('sprite_size').value);
+  const styleSuffix = document.getElementById('style_suffix').value.trim() || 'retro pixel art, no background, transparent PNG';
 
   btn.disabled = true;
   btn.innerHTML = '⏳ Generating...';
@@ -1094,28 +1139,18 @@ async function generate() {
   setProgress(0, 'Starting generation...');
   clearLog();
 
-  const gridSize = parseInt(document.getElementById('grid_size').value);
-  const spriteSize = parseInt(document.getElementById('sprite_size').value);
-  const styleGuide = document.getElementById('style-guide').value.trim();
-  const seed = document.getElementById('cfg-seed').value.trim() || null;
-  const steps = parseInt(document.getElementById('cfg-steps').value);
-
   const body = {
-    prompt,
-    actions: Array.from(state.selectedActions),
-    grid_size: gridSize,
+    base_character: baseCharacter,
+    actions: checkedActions,
     sprite_size: spriteSize,
-    style_guide_override: styleGuide,
-    template_name: state.selectedTemplate || null,
-    reference_image_id: state.selectedRef?.reference_id || null,
-    seed,
-    steps,
+    style_suffix: styleSuffix,
   };
 
-  log(`Generating ${gridSize * gridSize} frames (${gridSize}×${gridSize}, ${spriteSize}×${spriteSize}px)...`);
-  log(`Actions: ${body.actions.join(', ')}`);
-  if (body.template_name) log(`Template: ${body.template_name}`);
-  setProgress(5, 'Sending request to AI...');
+  const totalFrames = checkedActions.length * 4;
+  log(`Generating ${totalFrames} frames (${checkedActions.length} actions × 4 frames)...`);
+  log(`Actions: ${checkedActions.join(', ')}`);
+  log(`Sprite size: ${spriteSize}×${spriteSize}px`);
+  setProgress(5, 'Sending frames to AI...');
 
   try {
     const res = await fetch('/generate', {
@@ -1140,65 +1175,93 @@ async function generate() {
     log('ERROR: ' + err.message, 'err');
   } finally {
     btn.disabled = false;
-    btn.innerHTML = '✨ Generate Sprite Sheet';
+    btn.innerHTML = '✨ Generate Full Sheet';
   }
 }
 
 function showOutput(data) {
   state.currentOutputName = data.output_name;
+  state.actionsConfig = data.actions_config || [];
   state.currentFrames = [];
-  state.selectedFrames.clear();
 
-  // Sheet preview
+  const framesPerRow = data.frames_per_row || 4;
+  const totalFrames = data.frame_urls.length;
+  const numRows = Math.ceil(totalFrames / framesPerRow);
+
+  // Build flat frame list with action info
+  state.actionsConfig.forEach((ac, rowIdx) => {
+    ac.frames.forEach((frameGlobalIdx, colIdx) => {
+      state.currentFrames[frameGlobalIdx] = {
+        url: data.frame_urls[frameGlobalIdx],
+        action: ac.name,
+        index: frameGlobalIdx,
+        row: rowIdx,
+        col: colIdx,
+      };
+    });
+  });
+
+  // ── Sheet preview with row labels ────────────────────────────────────────
   const sheetImg = document.getElementById('sheet-preview-img');
   sheetImg.src = data.sheet_url + '?t=' + Date.now();
-  document.getElementById('dl-sheet').href  = data.sheet_url;
-  document.getElementById('dl-json').href   = data.json_url;
-  document.getElementById('dl-frames').href = `/output/${data.output_name}_frames.zip`;
 
-  // GIF preview
+  const metaSpan = document.getElementById('sheet-meta');
+  metaSpan.textContent = `${framesPerRow} cols × ${numRows} rows · ${data.sprite_size}px`;
+
+  // Build row labels
+  const labelsDiv = document.getElementById('row-labels');
+  labelsDiv.innerHTML = '';
+  state.actionsConfig.forEach(ac => {
+    const label = document.createElement('div');
+    label.className = 'row-label';
+    label.textContent = ac.name;
+    labelsDiv.appendChild(label);
+  });
+
+  // Download links
+  document.getElementById('dl-sheet').href    = data.sheet_url;
+  document.getElementById('dl-metadata').href  = data.metadata_url;
+  document.getElementById('dl-gif').href       = data.gif_url || '#';
+  document.getElementById('dl-gif').style.visibility = data.gif_url ? 'visible' : 'hidden';
+
+  // ── GIF preview ───────────────────────────────────────────────────────────
   const gifWrap = document.getElementById('gif-preview-wrap');
   if (data.gif_url) {
     gifWrap.style.display = 'flex';
     document.getElementById('gif-preview-img').src = data.gif_url + '?t=' + Date.now();
-    document.getElementById('dl-gif').href = data.gif_url;
   } else {
     gifWrap.style.display = 'none';
   }
 
-  // Frame grid
-  const frameGrid = document.getElementById('frame-grid');
-  frameGrid.innerHTML = '';
-  const totalFrames = data.total_frames || data.frame_urls.length;
-  const gridSize = data.grid_size || 4;
-  const actions = Array.from(state.selectedActions);
+  // ── Frames organized by action row ─────────────────────────────────────────
+  const framesByActionList = document.getElementById('frames-by-action-list');
+  framesByActionList.innerHTML = '';
+  state.actionsConfig.forEach(ac => {
+    const section = document.createElement('div');
+    section.className = 'action-row-section';
+    const heading = document.createElement('div');
+    heading.className = 'action-row-heading';
+    heading.textContent = ac.name;
+    section.appendChild(heading);
 
-  for (let i = 0; i < totalFrames; i++) {
-    const url = data.frame_urls[i] || `/frames/frame_${String(i).padStart(3,'0')}.png`;
-    const action = actions[i % actions.length];
-    state.currentFrames.push({ url, action, index: i });
-
-    const card = document.createElement('div');
-    card.className = 'frame-card';
-    card.dataset.index = i;
-    card.innerHTML = `
-      <div class="frame-check">✓</div>
-      <img class="frame-img" src="${url}?t=${Date.now()}" alt="Frame ${i}" loading="lazy">
-      <div class="frame-label">${action} #${i}</div>
-      <button class="regen-btn" onclick="event.stopPropagation();regenFrame(${i})">↻</button>
-    `;
-    card.addEventListener('click', (e) => {
-      if (e.target.classList.contains('regen-btn') || e.target.classList.contains('frame-check')) return;
-      card.classList.toggle('selected');
-      const idx = parseInt(card.dataset.index);
-      if (state.selectedFrames.has(idx)) state.selectedFrames.delete(idx);
-      else state.selectedFrames.add(idx);
+    const grid = document.createElement('div');
+    grid.className = 'action-frame-grid';
+    ac.frames.forEach((frameIdx, colIdx) => {
+      const frame = state.currentFrames[frameIdx];
+      if (!frame) return;
+      const card = document.createElement('div');
+      card.className = 'frame-card';
+      card.innerHTML = `
+        <img class="frame-img" src="${frame.url}?t=${Date.now()}" alt="${ac.name} f${colIdx}" loading="lazy">
+        <div class="frame-label">${ac.name} ${colIdx}</div>
+      `;
+      grid.appendChild(card);
     });
-    frameGrid.appendChild(card);
-  }
+    section.appendChild(grid);
+    framesByActionList.appendChild(section);
+  });
 
   document.getElementById('output-section').classList.add('visible');
-  // Scroll to output
   document.getElementById('output-section').scrollIntoView({ behavior: 'smooth' });
 }
 

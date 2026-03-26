@@ -6,12 +6,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from flask import Flask, request, jsonify, render_template, send_file
 
-from generator import (
-    load_config, generate_frame, pixelate_image,
-    save_frames,
-)
+from generation import generate_sprite_sheet
+from generator import load_config
 from prompt_builder import ACTION_PROMPTS
-from assembler import assemble_spritesheet, generate_gif
+from assembler import generate_gif
 
 app = Flask(__name__, template_folder="templates")
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
@@ -242,10 +240,84 @@ def append_log(entry: dict):
 
 @app.route("/generate", methods=["POST"])
 def generate():
+    """Row-based sprite sheet generation.
+
+    Accepts either the new row-based format (base_character + actions) or
+    the legacy grid-based format (prompt + grid_size) for backwards compatibility.
+    """
     data = request.get_json()
     if not data:
         return jsonify({"error": "No JSON data"}), 400
 
+    config = load_config()
+
+    if not config.get("deepinfra_api_key") or config["deepinfra_api_key"] == "YOUR_API_KEY_HERE":
+        return jsonify({
+            "error": "DeepInfra API key not set. "
+                     "Edit sprite-gen/config.json and add your key from https://deepinfra.com"
+        }), 400
+
+    base_character = data.get("base_character", "").strip()
+    actions_input = data.get("actions")
+    sprite_size = int(data.get("sprite_size", 64))
+    style_suffix = data.get("style_suffix", "retro pixel art, no background, transparent PNG").strip()
+
+    # ── New row-based format ─────────────────────────────────────────────────
+    if base_character and actions_input:
+        if isinstance(actions_input, str):
+            try:
+                actions = json.loads(actions_input)
+            except json.JSONDecodeError:
+                actions = [a.strip() for a in actions_input.split(",")]
+        else:
+            actions = list(actions_input)
+
+        if not actions:
+            return jsonify({"error": "At least one action is required"}), 400
+
+        sprite_size = max(16, min(256, sprite_size))
+        output_name = f"sprite_{int(time.time())}"
+
+        try:
+            result = generate_sprite_sheet(
+                base_character=base_character,
+                actions=actions,
+                sprite_size=sprite_size,
+                style_suffix=style_suffix,
+            )
+
+            response_data = {
+                "status": "done",
+                "output_name": result["generation_id"],
+                "sheet_url": f"/output/{Path(result['sheet_path']).name}",
+                "metadata_url": f"/output/{Path(result['metadata_path']).name}",
+                "gif_url": f"/output/{Path(result['gif_path']).name}" if result.get("gif_path") else None,
+                "frame_urls": [f"/frames/{Path(p).name}" for p in result["frames_paths"]],
+                "frames_per_row": result["frames_per_row"],
+                "actions_config": result["actions_config"],
+                "sprite_size": sprite_size,
+                "total_frames": len(result["frames_paths"]),
+            }
+
+            log_entry = {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "output_name": result["generation_id"],
+                "base_character": base_character,
+                "actions": actions,
+                "sprite_size": sprite_size,
+                "style_suffix": style_suffix,
+                "sheet_url": response_data["sheet_url"],
+                "gif_url": response_data["gif_url"],
+            }
+            append_log(log_entry)
+
+            return jsonify(response_data)
+
+        except Exception as e:
+            traceback.print_exc()
+            return jsonify({"error": str(e)}), 500
+
+    # ── Legacy grid-based format ─────────────────────────────────────────────
     prompt = data.get("prompt", "").strip()
     if not prompt:
         return jsonify({"error": "Prompt is required"}), 400
@@ -270,18 +342,10 @@ def generate():
     total_frames = grid_size * grid_size
     output_name = f"sprite_{int(time.time())}"
 
-    config = load_config()
-
     # Apply steps override
     if steps_override and isinstance(steps_override, int):
         config = dict(config)
         config["generation_steps"] = max(1, min(8, steps_override))
-
-    if not config.get("deepinfra_api_key") or config["deepinfra_api_key"] == "YOUR_API_KEY_HERE":
-        return jsonify({
-            "error": "DeepInfra API key not set. "
-                     "Edit sprite-gen/config.json and add your key from https://deepinfra.com"
-        }), 400
 
     # Prepend style guide if set
     style_guide = ""
@@ -308,6 +372,10 @@ def generate():
                 break
 
     try:
+        from prompt_builder import ACTION_PROMPTS
+        from generator import generate_frame, pixelate_image, save_frames
+        from assembler import assemble_spritesheet as _asm
+
         frame_prompts = []
         for i in range(total_frames):
             action = actions[i % len(actions)]
@@ -331,10 +399,20 @@ def generate():
         frame_paths = save_frames(frames, FRAMES_DIR)
         print(f"Saved {len(frame_paths)} frames")
 
-        result = assemble_spritesheet(
-            frame_paths=frame_paths,
-            grid_size=grid_size,
+        # Build action_frames for assembler: each action gets 4 frames
+        action_frames = []
+        for i, action in enumerate(actions):
+            start = i * grid_size
+            end = start + grid_size
+            if end <= len(frame_paths):
+                action_frames.append((action, frame_paths[start:end]))
+
+        result = _asm(
+            action_frames=action_frames,
             output_name=output_name,
+            frame_size=sprite_size,
+            frames_per_row=grid_size,
+            output_dir=str(OUTPUT_DIR),
         )
         print(f"Sprite sheet: {result['sheet_path']}")
 
@@ -351,7 +429,7 @@ def generate():
             "status": "done",
             "output_name": output_name,
             "sheet_url": f"/output/{Path(result['sheet_path']).name}",
-            "json_url": f"/output/{Path(result['json_path']).name}",
+            "metadata_url": f"/output/{Path(result['metadata_path']).name}",
             "gif_url": f"/output/{gif_path.name}" if gif_result else None,
             "total_frames": total_frames,
             "grid_size": grid_size,
@@ -359,7 +437,6 @@ def generate():
             "frame_urls": [f"/frames/{Path(p).name}" for p in frame_paths],
         }
 
-        # Log this generation
         log_entry = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "output_name": output_name,
@@ -439,6 +516,7 @@ def regenerate_frame():
     full = " ".join(parts)
 
     try:
+        from generator import generate_frame, pixelate_image
         raw = generate_frame(full, size=512, config=config, seed=seed)
         sprite = pixelate_image(raw, sprite_size)
 

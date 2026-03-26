@@ -324,3 +324,40 @@ def apply_template(
 def list_templates() -> List[str]:
     """Return names of all available templates."""
     return list(_load_templates().keys())
+
+
+# ── Row-based sheet prompts ─────────────────────────────────────────────────────
+
+def build_base_character(description: str) -> str:
+    """Prepend 'isometric pixel art' if not present, ensure consistent format."""
+    d = description.strip()
+    if not d:
+        return d
+    lower = d.lower()
+    if "pixel art" not in lower and "sprite" not in lower:
+        d = "isometric pixel art " + d
+    return d
+
+
+def build_sheet_prompt(
+    base_character: str,
+    action: str,
+    frame_number: int,
+    total_frames: int = 4,
+    style_suffix: str = "retro pixel art, no background, transparent PNG",
+) -> str:
+    """Build a prompt for a single frame in a row-based sprite sheet.
+
+    Args:
+        base_character: The character description, e.g.
+            "isometric pixel art older businessman, late 50s, gray temples..."
+        action: The animation action, e.g. "idle" or "walk"
+        frame_number: Which frame in the animation (0-3)
+        total_frames: Always 4 for standard grid
+        style_suffix: Additional style keywords to append
+
+    Returns:
+        Full prompt string for this frame, including frame position in cycle.
+    """
+    prompt = f"{base_character}, {action} animation, frame {frame_number}/{total_frames}, {style_suffix}"
+    return prompt

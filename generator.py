@@ -12,7 +12,7 @@ import json
 import time
 import requests
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from PIL import Image, ImageFilter
 
@@ -151,3 +151,32 @@ def save_frames(
         paths.append(str(path))
 
     return paths
+
+
+# ── Batch generation ───────────────────────────────────────────────────────────
+
+def generate_batch(
+    frames: List[Tuple[str, str]],
+    size: int = 512,
+    config: dict = None,
+) -> List[Tuple[str, Image.Image]]:
+    """Generate multiple frames in sequence.
+
+    Args:
+        frames: List of (action_name, prompt) tuples.
+        size: API image size in pixels.
+        config: Config dict. If None, loaded from config.json.
+
+    Returns:
+        List of (action_name, PIL.Image) tuples in the same order as input.
+    """
+    if config is None:
+        config = load_config()
+
+    results = []
+    for action_name, prompt in frames:
+        raw_bytes = generate_frame(prompt, size=size, config=config)
+        img = pixelate_image(raw_bytes, size)
+        results.append((action_name, img))
+
+    return results

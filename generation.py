@@ -10,15 +10,22 @@ from typing import List, Optional, Dict
 from style import load_style as _load_style, get_style_keywords
 from reference import get_reference
 from consistency import build_consistent_prompt, apply_modifications
-from prompt_builder import build_full_prompt, build_action_prompt, estimate_quality
+from prompt_builder import (
+    build_full_prompt,
+    build_action_prompt,
+    build_sheet_prompt,
+    build_base_character,
+    estimate_quality,
+    ACTION_PROMPTS,
+)
 from generator import (
     generate_frame,
+    generate_batch,
     pixelate_image,
     save_frames,
     load_config,
 )
-from prompt_builder import ACTION_PROMPTS
-from assembler import assemble_spritesheet
+from assembler import assemble_spritesheet, generate_gif
 
 
 DEFAULT_STYLE_PATH = Path(__file__).parent / "defaults" / "style-guide-default.json"
@@ -33,6 +40,124 @@ def _log_generation(entry: dict):
 
 
 def generate_sprite_sheet(
+    base_character: str,
+    actions: List[str],
+    sprite_size: int = 64,
+    style_suffix: str = "retro pixel art, no background, transparent PNG",
+    config_path: str = None,
+) -> dict:
+    """Generate a full sprite sheet with all actions as rows.
+
+    Steps:
+        1. Build prompts for all (action, frame) combinations
+        2. Generate all frames via batch API
+        3. Assemble into sheet (each action = 1 row, 4 frames per row)
+        4. Generate GIF preview
+        5. Return paths to sheet, JSON metadata, GIF
+
+    Args:
+        base_character: The character description (e.g.
+            "isometric pixel art older businessman, late 50s, gray temples...").
+        actions: List of action names, e.g. ["idle", "walk", "run", "jump"].
+        sprite_size: Pixel size of each frame (default 64).
+        style_suffix: Additional style keywords (default includes transparent PNG).
+        config_path: Optional path to config dict.
+
+    Returns:
+        dict with keys: generation_id, sheet_path, metadata_path, gif_path,
+        frames_paths, frames_per_row, actions_config, elapsed_seconds.
+    """
+    generation_id = str(uuid.uuid4())[:8]
+    start_time = time.time()
+    frames_per_row = 4
+
+    # 1. Load config
+    config = load_config()
+
+    # 2. Normalize base character
+    base = build_base_character(base_character)
+
+    # 3. Build all (action, prompt) tuples for all frames
+    # Each action gets 4 frames (0,1,2,3)
+    frame_tasks = []  # List of (label, prompt) for generator.generate_batch
+    frame_labels = []  # parallel list of (action, frame_num) for organization
+
+    for action in actions:
+        for frame_num in range(frames_per_row):
+            prompt = build_sheet_prompt(
+                base_character=base,
+                action=action,
+                frame_number=frame_num,
+                total_frames=frames_per_row,
+                style_suffix=style_suffix,
+            )
+            frame_tasks.append((f"{action}_{frame_num}", prompt))
+            frame_labels.append((action, frame_num))
+
+    # 4. Generate all frames in batch
+    generated = generate_batch(frame_tasks, size=512, config=config)
+    # generated is List[Tuple[str, PIL.Image]] — same order as frame_tasks
+
+    # 5. Save frames — save_frames returns flat list of paths
+    # We need to organize them per-action for the assembler
+    frame_paths = save_frames(generated, output_dir=str(Path(config.get("frames_dir", "frames"))))
+
+    # 6. Build action_frames for assembler: [(action, [path, path, path, path]), ...]
+    action_frames: List[tuple] = []
+    for i, action in enumerate(actions):
+        action_path_start = i * frames_per_row
+        action_path_list = frame_paths[action_path_start:action_path_start + frames_per_row]
+        action_frames.append((action, action_path_list))
+
+    # 7. Assemble sprite sheet
+    output_dir = Path(config.get("output_dir", "output"))
+    output_name = f"sprite_{generation_id}"
+    sheet_result = assemble_spritesheet(
+        action_frames=action_frames,
+        output_name=output_name,
+        frame_size=sprite_size,
+        frames_per_row=frames_per_row,
+        output_dir=str(output_dir),
+    )
+
+    # 8. Generate GIF preview — cycle through first action's frames for a quick preview
+    gif_path = output_dir / f"{output_name}.gif"
+    # Use the idle (first action) frames for GIF if available, else all frames
+    preview_frames = frame_paths[:frames_per_row] if action_frames else frame_paths
+    gif_result = generate_gif(preview_frames, str(gif_path), delay=120, loop=0)
+
+    # 9. Log
+    elapsed = time.time() - start_time
+    log_entry = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "generation_id": generation_id,
+        "base_character": base_character,
+        "actions": actions,
+        "sprite_size": sprite_size,
+        "style_suffix": style_suffix,
+        "frame_count": len(frame_paths),
+        "sheet_path": sheet_result["sheet_path"],
+        "metadata_path": sheet_result["metadata_path"],
+        "gif_path": str(gif_path) if gif_result else None,
+        "elapsed_seconds": round(elapsed, 2),
+    }
+    _log_generation(log_entry)
+
+    return {
+        "generation_id": generation_id,
+        "sheet_path": sheet_result["sheet_path"],
+        "metadata_path": sheet_result["metadata_path"],
+        "gif_path": str(gif_path) if gif_result else None,
+        "frames_paths": frame_paths,
+        "frames_per_row": frames_per_row,
+        "actions_config": [{"name": a, "frames": list(range(i * frames_per_row, (i + 1) * frames_per_row))} for i, a in enumerate(actions)],
+        "elapsed_seconds": round(elapsed, 2),
+    }
+
+
+# ── Legacy compatibility: old generate_sprite_sheet signature ─────────────────
+
+def generate_sprite_sheet_legacy(
     description: str,
     actions: List[str],
     grid_size: int,
@@ -44,48 +169,22 @@ def generate_sprite_sheet(
     config: Optional[dict] = None,
     api_key: Optional[str] = None,
 ) -> dict:
-    """Full sprite sheet generation pipeline.
+    """Legacy sprite sheet generation (grid-based, one action per N frames).
 
-    Args:
-        description: Base character/object description
-        actions: List of action names (e.g. ["idle", "walk", "attack"])
-        grid_size: NxN grid for the sprite sheet (e.g. 4 = 4x4)
-        sprite_size: Pixel size of each sprite (e.g. 64)
-        style_guide: Style guide dict (loaded from default if None)
-        reference_id: Reference image ID for style matching
-        modifications: Natural language modifications to apply
-        seed: Random seed for reproducibility
-        config: Config dict (loaded from config.json if None)
-        api_key: DeepInfra API key override
-
-    Returns:
-        dict with paths and metadata:
-            - sheet_path, json_path, frames_paths, generation_id
-            - prompt_quality, style_consistency, timing
+    This function is kept for backwards compatibility. New code should use
+    :func:`generate_sprite_sheet` which generates one action per row.
     """
     generation_id = str(uuid.uuid4())[:8]
     start_time = time.time()
 
-    # 1. Load style guide (or use default)
-    if style_guide is None:
-        if DEFAULT_STYLE_PATH.exists():
-            style_guide = _load_style(str(DEFAULT_STYLE_PATH))
+    if style_guide is None and DEFAULT_STYLE_PATH.exists():
+        style_guide = _load_style(str(DEFAULT_STYLE_PATH))
 
-    # 2. Load config
     if config is None:
         config = load_config()
-
-    # Override API key if provided
     if api_key:
         config["deepinfra_api_key"] = api_key
 
-    # 3. Load reference if provided
-    reference = None
-    if reference_id:
-        reference = get_reference(reference_id)
-
-    # 4. Build prompts for each frame
-    # Determine base prompt with consistency
     base_prompt = description
     if reference_id or modifications:
         base_prompt = build_consistent_prompt(
@@ -95,17 +194,14 @@ def generate_sprite_sheet(
             modifications=modifications,
         )
 
-    # Build action prompts for each frame
     frame_prompts = []
     for action in actions:
         action_desc = build_action_prompt(action, sprite_size)
         full_frame_prompt = f"{base_prompt}, {action_desc}"
         frame_prompts.append((action, full_frame_prompt))
 
-    # 5. Generate each frame via DeepInfra API
     generated_frames = []
     errors = []
-
     for i, (action, prompt) in enumerate(frame_prompts):
         try:
             raw_bytes = generate_frame(prompt, size=512, config=config)
@@ -117,26 +213,29 @@ def generate_sprite_sheet(
     if not generated_frames:
         raise RuntimeError(f"All frames failed to generate. Errors: {errors}")
 
-    # 6. Save frames
     frames_dir = Path(config.get("frames_dir", "frames"))
     frame_paths = save_frames(generated_frames, output_dir=str(frames_dir))
 
-    # 7. Assemble sprite sheet
     output_dir = Path(config.get("output_dir", "output"))
     output_name = f"sprite_{generation_id}"
+
+    # Build action_frames for the new assembler format
+    action_frames = []
+    for i, action in enumerate(actions):
+        start = i * grid_size
+        end = start + grid_size
+        action_frames.append((action, frame_paths[start:end]))
+
     sheet_result = assemble_spritesheet(
-        frame_paths=frame_paths,
-        grid_size=grid_size,
+        action_frames=action_frames,
         output_name=output_name,
+        frame_size=sprite_size,
+        frames_per_row=grid_size,
         output_dir=str(output_dir),
     )
 
-    # 8. Estimate prompt quality
-    avg_quality = sum(
-        estimate_quality(p, style_guide) for _, p in frame_prompts
-    ) / len(frame_prompts) if frame_prompts else 0
+    avg_quality = sum(estimate_quality(p) for _, p in frame_prompts) / max(len(frame_prompts), 1)
 
-    # 9. Log generation
     elapsed = time.time() - start_time
     log_entry = {
         "timestamp": datetime.utcnow().isoformat(),
@@ -153,7 +252,7 @@ def generate_sprite_sheet(
         "errors": errors,
         "frame_count": len(generated_frames),
         "sheet_path": sheet_result["sheet_path"],
-        "json_path": sheet_result["json_path"],
+        "json_path": sheet_result["metadata_path"],
         "prompt_quality_score": round(avg_quality, 1),
         "elapsed_seconds": round(elapsed, 2),
     }
@@ -162,7 +261,7 @@ def generate_sprite_sheet(
     return {
         "generation_id": generation_id,
         "sheet_path": sheet_result["sheet_path"],
-        "json_path": sheet_result["json_path"],
+        "json_path": sheet_result["metadata_path"],
         "frames_paths": frame_paths,
         "frame_count": len(generated_frames),
         "error_count": len(errors),
@@ -188,16 +287,12 @@ def regenerate_frame(
     config: Optional[dict] = None,
     api_key: Optional[str] = None,
 ) -> dict:
-    """Regenerate a single frame from a previous generation.
-
-    Useful for fixing a bad frame without regenerating the entire sheet.
-    """
+    """Regenerate a single frame from a previous generation."""
     if config is None:
         config = load_config()
     if api_key:
         config["deepinfra_api_key"] = api_key
 
-    # Get the original prompt for this frame
     prompts = previous_result.get("config", {}).get("actions", [])
     original_description = previous_result.get("config", {}).get("description", "")
 
@@ -208,13 +303,11 @@ def regenerate_frame(
     else:
         raise ValueError(f"Frame index {frame_index} out of range")
 
-    # Build new prompt
     if modifications:
         prompt = f"{original_description}, {modifications}, {build_action_prompt(action, previous_result.get('config', {}).get('sprite_size', 64))}"
     else:
         prompt = f"{original_description}, {build_action_prompt(action, previous_result.get('config', {}).get('sprite_size', 64))}"
 
-    # Generate
     raw_bytes = generate_frame(prompt, size=512, config=config)
     sprite_img = pixelate_image(raw_bytes, previous_result.get("config", {}).get("sprite_size", 64))
 
@@ -258,8 +351,8 @@ def get_generation_stats() -> dict:
 
     total_frames = sum(e.get("frame_count", 0) for e in entries)
     total_errors = sum(e.get("error_count", 0) for e in entries)
-    avg_quality = sum(e.get("prompt_quality_score", 0) for e in entries) / len(entries)
-    avg_time = sum(e.get("elapsed_seconds", 0) for e in entries) / len(entries)
+    avg_quality = sum(e.get("prompt_quality_score", 0) for e in entries) / max(len(entries), 1)
+    avg_time = sum(e.get("elapsed_seconds", 0) for e in entries) / max(len(entries), 1)
 
     return {
         "total_generations": len(entries),
