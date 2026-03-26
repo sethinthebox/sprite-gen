@@ -88,8 +88,8 @@ def generate_sprite_sheet(
 
     # Generate each action's 4 frames as a group
     for action_idx, action in enumerate(actions):
-        # One seed per action — locks character style for this action's 4 frames
-        action_seed = random.randint(0, 2**31)
+        # Use the pre-generated seed for this action (reproducible)
+        action_seed = seeds[action_idx]
 
         print(f"\n[{action_idx+1}/{len(actions)}] Generating action: {action} (seed={action_seed})")
 
@@ -146,7 +146,7 @@ def generate_sprite_sheet(
         "generation_id": generation_id,
         "base_character": base_character,
         "actions": actions,
-        "action_seeds": {action: seeds[actions.index(action)] for action in actions},
+        "action_seeds": {action: seeds[i] for i, action in enumerate(actions)},
         "sprite_size": sprite_size,
         "style_suffix": style_suffix,
         "frame_count": len(all_frame_paths),
