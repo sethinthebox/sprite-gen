@@ -23,3 +23,4 @@ Thumbs.db
 
 # Aseprite (Windows path, not needed in repo)
 *.aseprite
+.frame_cache/
