@@ -3,6 +3,7 @@
 import json
 import time
 import uuid
+import random
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Dict
@@ -13,16 +14,13 @@ from consistency import build_consistent_prompt, apply_modifications
 from prompt_builder import (
     build_full_prompt,
     build_action_prompt,
-    build_sheet_prompt,
     build_base_character,
     estimate_quality,
     ACTION_PROMPTS,
 )
 from generator import (
     generate_frame,
-    generate_batch,
     pixelate_image,
-    save_frames,
     load_config,
 )
 from assembler import assemble_spritesheet, generate_gif_from_actions
@@ -48,20 +46,24 @@ def generate_sprite_sheet(
 ) -> dict:
     """Generate a full sprite sheet with all actions as rows.
 
+    Strategy: Generate each action's 4 frames as a group, using a shared
+    seed per action. This keeps FLUX consistent within an action while
+    allowing different actions to vary (e.g. walk pose vs run pose).
+
     Steps:
-        1. Build prompts for all (action, frame) combinations
-        2. Generate all frames via batch API
-        3. Assemble into sheet (each action = 1 row, 4 frames per row)
-        4. Generate GIF preview
-        5. Return paths to sheet, JSON metadata, GIF
+        1. Build prompts for each action (4 distinct pose descriptions per action)
+        2. Generate each action's frames sequentially with a shared seed
+        3. Pixelate and save frames
+        4. Assemble into sprite sheet (each action = 1 row)
+        5. Generate GIF preview cycling through all actions
+        6. Return paths to sheet, JSON metadata, GIF
 
     Args:
         base_character: The character description (e.g.
             "isometric pixel art older businessman, late 50s, gray temples...").
         actions: List of action names, e.g. ["idle", "walk", "run", "jump"].
         sprite_size: Pixel size of each frame (default 64).
-        style_suffix: Additional style keywords (default includes transparent PNG).
-        config_path: Optional path to config dict.
+        style_suffix: Additional style keywords.
 
     Returns:
         dict with keys: generation_id, sheet_path, metadata_path, gif_path,
@@ -71,45 +73,45 @@ def generate_sprite_sheet(
     start_time = time.time()
     frames_per_row = 4
 
-    # 1. Load config
     config = load_config()
-
-    # 2. Normalize base character
     base = build_base_character(base_character)
 
-    # 3. Build all (action, prompt) tuples for all frames
-    # Each action gets 4 frames (0,1,2,3)
-    frame_tasks = []  # List of (label, prompt) for generator.generate_batch
-    frame_labels = []  # parallel list of (action, frame_num) for organization
-
-    for action in actions:
-        for frame_num in range(frames_per_row):
-            prompt = build_sheet_prompt(
-                base_character=base,
-                action=action,
-                frame_number=frame_num,
-                total_frames=frames_per_row,
-                style_suffix=style_suffix,
-            )
-            frame_tasks.append((f"{action}_{frame_num}", prompt))
-            frame_labels.append((action, frame_num))
-
-    # 4. Generate all frames in batch
-    generated = generate_batch(frame_tasks, size=512, config=config)
-    # generated is List[Tuple[str, PIL.Image]] — same order as frame_tasks
-
-    # 5. Save frames — save_frames returns flat list of paths
-    # We need to organize them per-action for the assembler
-    frame_paths = save_frames(generated, output_dir=str(Path(config.get("frames_dir", "frames"))))
-
-    # 6. Build action_frames for assembler: [(action, [path, path, path, path]), ...]
+    # Collect all action_frames for assembler
     action_frames: List[tuple] = []
-    for i, action in enumerate(actions):
-        action_path_start = i * frames_per_row
-        action_path_list = frame_paths[action_path_start:action_path_start + frames_per_row]
-        action_frames.append((action, action_path_list))
 
-    # 7. Assemble sprite sheet
+    # Generate each action's 4 frames as a group
+    for action_idx, action in enumerate(actions):
+        # One seed per action — locks character style for this action's 4 frames
+        action_seed = random.randint(0, 2**31)
+
+        print(f"\n[{action_idx+1}/{len(actions)}] Generating action: {action} (seed={action_seed})")
+
+        # Build 4 distinct pose prompts for this action
+        # Each frame gets a specific pose description (not "frame 0/4" which FLUX ignores)
+        frame_prompts = _build_action_frame_prompts(base, action, style_suffix)
+
+        action_imgs = []
+        for frame_idx, (pose_desc, full_prompt) in enumerate(frame_prompts):
+            print(f"  [{frame_idx+1}/{frames_per_row}] {pose_desc[:60]}...")
+            try:
+                raw = generate_frame(
+                    prompt=full_prompt,
+                    size=512,
+                    config=config,
+                    seed=action_seed,  # same seed for all 4 frames of this action
+                )
+                sprite = pixelate_image(raw, sprite_size)
+                action_imgs.append(sprite)
+            except Exception as e:
+                print(f"  ERROR frame {frame_idx}: {e}")
+                action_imgs.append(None)
+
+        # Save action frames to disk
+        frames_dir = Path(config.get("frames_dir", "frames"))
+        frame_paths = _save_action_frames(action, action_idx, action_imgs, frames_dir)
+        action_frames.append((action, frame_paths))
+
+    # Assemble sprite sheet
     output_dir = Path(config.get("output_dir", "output"))
     output_name = f"sprite_{generation_id}"
     sheet_result = assemble_spritesheet(
@@ -120,42 +122,175 @@ def generate_sprite_sheet(
         output_dir=str(output_dir),
     )
 
-    # 8. Generate GIF preview — cycle through first action's frames for a quick preview
+    # Generate GIF cycling through all actions
     gif_path = output_dir / f"{output_name}.gif"
-    # Generate GIF that cycles through all actions
-    gif_path = output_dir / f"{output_name}.gif"
-    gif_result = generate_gif_from_actions(action_frames, str(gif_path), delay_per_frame=120, loop=0)
+    gif_result = generate_gif_from_actions(
+        action_frames, str(gif_path), delay_per_frame=120, loop=0
+    )
 
-    # 9. Log
+    # Collect flat list of frame paths
+    all_frame_paths = []
+    for _, paths in action_frames:
+        all_frame_paths.extend(paths)
+
     elapsed = time.time() - start_time
-    log_entry = {
+    _log_generation({
         "timestamp": datetime.utcnow().isoformat(),
         "generation_id": generation_id,
         "base_character": base_character,
         "actions": actions,
         "sprite_size": sprite_size,
         "style_suffix": style_suffix,
-        "frame_count": len(frame_paths),
+        "frame_count": len(all_frame_paths),
         "sheet_path": sheet_result["sheet_path"],
         "metadata_path": sheet_result["metadata_path"],
         "gif_path": str(gif_path) if gif_result else None,
         "elapsed_seconds": round(elapsed, 2),
-    }
-    _log_generation(log_entry)
+    })
 
     return {
         "generation_id": generation_id,
         "sheet_path": sheet_result["sheet_path"],
         "metadata_path": sheet_result["metadata_path"],
         "gif_path": str(gif_path) if gif_result else None,
-        "frames_paths": frame_paths,
+        "frames_paths": all_frame_paths,
         "frames_per_row": frames_per_row,
-        "actions_config": [{"name": a, "frames": list(range(i * frames_per_row, (i + 1) * frames_per_row))} for i, a in enumerate(actions)],
+        "actions_config": [
+            {"name": a, "frames": list(range(i * frames_per_row, (i + 1) * frames_per_row))}
+            for i, a in enumerate(actions)
+        ],
         "elapsed_seconds": round(elapsed, 2),
     }
 
 
-# ── Legacy compatibility: old generate_sprite_sheet signature ─────────────────
+def _build_action_frame_prompts(
+    base_character: str,
+    action: str,
+    style_suffix: str,
+) -> List[tuple]:
+    """Build 4 distinct pose prompts for one action's animation cycle.
+
+    Each frame gets a specific pose description rather than "frame N/4".
+    Returns list of (pose_description, full_prompt) tuples.
+
+    The FLUX model understands sequential animation descriptions but not
+    fractional frame numbers — describing the actual pose is more reliable.
+    """
+    # Pose descriptions per action — 4 distinct frames per animation cycle
+    poses_by_action = {
+        "idle": [
+            "standing neutral, arms relaxed at sides, slight weight on right leg",
+            "standing, slight chest rise, shoulders up, natural breathing in",
+            "standing neutral, arms relaxed, balanced stance",
+            "standing, slight chest fall, shoulders down, natural breathing out",
+        ],
+        "walk": [
+            "walking cycle, left foot forward, right arm forward, step forward pose",
+            "walking cycle, both feet passing, arms swinging naturally, mid-stride",
+            "walking cycle, right foot forward, left arm forward, step forward pose",
+            "walking cycle, both feet passing, arms swinging through, mid-stride",
+        ],
+        "run": [
+            "running cycle, left leg extended forward, arms pumping, leaning forward",
+            "running cycle, peak stride, both feet off ground briefly, dynamic pose",
+            "running cycle, right leg extended forward, arms pumping, leaning forward",
+            "running cycle, peak stride opposite, both feet off ground, full extension",
+        ],
+        "jump": [
+            "jumping, crouch before takeoff, knees bent, arms pulled back",
+            "jumping, leaving ground, legs tucking under, arms rising",
+            "jumping, peak of jump, legs fully tucked under body, arms up",
+            "jumping, descending, legs extending for landing, arms out for balance",
+        ],
+        "attack": [
+            "attacking, weapon drawn back, wind-up pose before strike",
+            "attacking, weapon at peak extension, full strike moment",
+            "attacking, weapon following through, recovering from strike",
+            "attacking, weapon returning to ready position, brief reset",
+        ],
+        "cast": [
+            "casting spell, hands together gathering energy, concentration pose",
+            "casting spell, arms thrust forward, energy release moment",
+            "casting spell, energy dissipating, arms pulling back, fade pose",
+            "casting spell, hands parting, magic fading, return to ready",
+        ],
+        "dance": [
+            "dancing, arms raised, weight on left foot, rhythmic opening pose",
+            "dancing, body twisted left, arms sweeping, peak movement",
+            "dancing, arms lowered, weight shifting right, transition",
+            "dancing, body twisted right, arms through sweep, closing pose",
+        ],
+        "death": [
+            "dying, impact frame, torso recoiling, arms flung wide",
+            "dying, stumbling backward, legs buckling, desperate expression",
+            "dying, falling to knees, one hand reaching out",
+            "dying, collapsed on ground, lying prone, final moment",
+        ],
+        "dodge": [
+            "dodging, body shifting left, weight transferring, lean start",
+            "dodging, body fully leaning left, legs crossed, quick evade peak",
+            "dodging, returning to neutral, weight shifting back",
+            "dodging, body shifted right, ready stance, dodge complete",
+        ],
+        "hurt": [
+            "hurt, impact frame, recoiling from hit, arms up defensively",
+            "hurt, stumbling back, clutching affected area, grimacing",
+            "hurt, staggering, trying to recover, off-balance pose",
+            "hurt, leaning forward, bracing, pain reaction",
+        ],
+        "block": [
+            "blocking, shield raised high, defensive stance, guarding",
+            "blocking, shield at full extension, absorbing impact, braced",
+            "blocking, shield lowering, recovering from block",
+            "blocking, shield at ready position, alert stance",
+        ],
+    }
+
+    default_poses = [
+        f"{action} animation, frame 1 of 4, dynamic pose",
+        f"{action} animation, frame 2 of 4, peak action pose",
+        f"{action} animation, frame 3 of 4, follow-through pose",
+        f"{action} animation, frame 4 of 4, recovery pose",
+    ]
+
+    poses = poses_by_action.get(action.lower(), default_poses)
+
+    result = []
+    for i, pose in enumerate(poses):
+        full_prompt = f"{base_character}, {pose}, {style_suffix}"
+        result.append((pose, full_prompt))
+
+    return result
+
+
+def _save_action_frames(
+    action: str,
+    action_idx: int,
+    imgs: List,
+    frames_dir: Path,
+) -> List[str]:
+    """Save a list of PIL Images as numbered PNG frames.
+
+    Returns list of file paths in order.
+    """
+    frames_dir.mkdir(parents=True, exist_ok=True)
+    paths = []
+
+    for frame_idx, img in enumerate(imgs):
+        if img is None:
+            # Create a placeholder — 1x1 transparent PNG
+            from PIL import Image
+            img = Image.new("RGBA", (1, 1), (0, 0, 0, 0))
+
+        global_idx = action_idx * 4 + frame_idx
+        path = frames_dir / f"frame_{global_idx:03d}.png"
+        img.save(str(path), "PNG")
+        paths.append(str(path))
+
+    return paths
+
+
+# ── Legacy compatibility ──────────────────────────────────────────────────────
 
 def generate_sprite_sheet_legacy(
     description: str,
@@ -169,11 +304,7 @@ def generate_sprite_sheet_legacy(
     config: Optional[dict] = None,
     api_key: Optional[str] = None,
 ) -> dict:
-    """Legacy sprite sheet generation (grid-based, one action per N frames).
-
-    This function is kept for backwards compatibility. New code should use
-    :func:`generate_sprite_sheet` which generates one action per row.
-    """
+    """Legacy grid-based sprite sheet generation."""
     generation_id = str(uuid.uuid4())[:8]
     start_time = time.time()
 
@@ -214,12 +345,11 @@ def generate_sprite_sheet_legacy(
         raise RuntimeError(f"All frames failed to generate. Errors: {errors}")
 
     frames_dir = Path(config.get("frames_dir", "frames"))
-    frame_paths = save_frames(generated_frames, output_dir=str(frames_dir))
+    frame_paths = _save_action_frames("legacy", 0, [img for _, img in generated_frames], frames_dir)
 
     output_dir = Path(config.get("output_dir", "output"))
     output_name = f"sprite_{generation_id}"
 
-    # Build action_frames for the new assembler format
     action_frames = []
     for i, action in enumerate(actions):
         start = i * grid_size
@@ -237,7 +367,7 @@ def generate_sprite_sheet_legacy(
     avg_quality = sum(estimate_quality(p) for _, p in frame_prompts) / max(len(frame_prompts), 1)
 
     elapsed = time.time() - start_time
-    log_entry = {
+    _log_generation({
         "timestamp": datetime.utcnow().isoformat(),
         "generation_id": generation_id,
         "description": description,
@@ -255,8 +385,7 @@ def generate_sprite_sheet_legacy(
         "json_path": sheet_result["metadata_path"],
         "prompt_quality_score": round(avg_quality, 1),
         "elapsed_seconds": round(elapsed, 2),
-    }
-    _log_generation(log_entry)
+    })
 
     return {
         "generation_id": generation_id,
