@@ -217,19 +217,19 @@ def pixelate_image(image_bytes: bytes, target_size: int) -> Image.Image:
     # Step 3: Sharpen to recover crispness after resize
     img_small = img_small.filter(ImageFilter.SHARPEN)
 
-    # Step 4: Normalize — anchor character feet at consistent Y position
-    img_small = normalize_sprite(img_small, target_size)
-
+    # NOTE: Do NOT normalize here — normalization requires a shared reference
+    # feet_y across all frames. Call normalize_sprite(img, ref_feet_y=REF) after QC.
     return img_small
 
 
 
 
-def normalize_sprite(img: Image.Image, target_size: int = 64) -> Image.Image:
+def normalize_sprite(img: Image.Image, target_size: int = 64,
+                    reference_feet_y: int = None) -> Image.Image:
     """Normalize a sprite frame so the character is consistently anchored.
 
     Finds the non-transparent content bounding box and shifts the character
-    so feet land at a consistent Y position (82% from top = typical standing height).
+    so feet land at the same Y position as the reference frame.
     This fixes FLUX's tendency to place characters at slightly different
     vertical positions in each frame, which breaks animation.
 
@@ -238,6 +238,8 @@ def normalize_sprite(img: Image.Image, target_size: int = 64) -> Image.Image:
     Args:
         img: PIL RGBA image (sprite frame at target_size).
         target_size: Frame size in pixels.
+        reference_feet_y: Target feet Y position (from first good frame).
+                          If None, uses default anchor (82% from top).
 
     Returns:
         Normalized PIL RGBA image.
@@ -262,8 +264,12 @@ def normalize_sprite(img: Image.Image, target_size: int = 64) -> Image.Image:
     if y_max <= y_min:
         return frame  # empty frame
 
-    # Anchor feet at 82% from top
-    anchor_y = int(target_size * 0.82)
+    # Anchor feet at reference_feet_y if provided, else default (82% from top)
+    if reference_feet_y is not None:
+        anchor_y = reference_feet_y
+    else:
+        anchor_y = int(target_size * 0.82)
+
     content_bottom = y_max
     vertical_shift = anchor_y - content_bottom
 
@@ -356,3 +362,139 @@ def generate_batch(
             print(f"[generate_batch] ERROR for '{e['action']}': {e['error']}")
 
     return results
+
+
+# ── Frame QC ─────────────────────────────────────────────────────────────────
+
+class FrameQCResult:
+    """Result of quality control check on a sprite frame."""
+    def __init__(self, passed: bool, reasons: list = None,
+                 content_bbox: tuple = None, aspect: float = 0,
+                 feet_y: int = 0, centered_x: int = 0):
+        self.passed = passed
+        self.reasons = reasons or ([] if passed else ["unknown"])
+        self.content_bbox = content_bbox or (0, 0, 0, 0)
+        self.aspect = aspect
+        self.feet_y = feet_y
+        self.centered_x = centered_x
+
+
+def validate_frame(img: Image.Image, target_size: int = 64,
+                   min_aspect: float = 0.25, max_aspect: float = 0.9,
+                   max_feet_range: int = 6,
+                   reference_feet_y: int = None) -> FrameQCResult:
+    """Check a sprite frame for quality issues.
+
+    QC checks:
+    1. Corner transparency — corners must be transparent (no background)
+    2. Content size — character must occupy at least 25% of frame
+    3. Aspect ratio — character should be taller than wide (0.25-0.9 for humanoid)
+    4. Feet position — character feet should align with reference (within max_feet_range)
+    5. Off-center — character should be roughly centered horizontally
+
+    Args:
+        img: PIL RGBA image at target_size.
+        target_size: Expected frame size (e.g. 64).
+        min_aspect: Minimum width/height ratio (prevents squished sprites).
+        max_aspect: Maximum width/height ratio (prevents fat sprites).
+        max_feet_range: Max Y deviation from reference feet position.
+        reference_feet_y: Expected feet Y from first good frame.
+
+    Returns:
+        FrameQCResult with pass/fail and details.
+    """
+    w, h = img.size
+    reasons = []
+
+    # 1. Corner transparency
+    corners = [
+        img.getpixel((0, 0)),
+        img.getpixel((w - 1, 0)),
+        img.getpixel((0, h - 1)),
+        img.getpixel((w - 1, h - 1)),
+    ]
+    corner_alpha = [c[3] for c in corners]
+    if not all(a < 5 for a in corner_alpha):
+        reasons.append(f"bg_corners:{corner_alpha}")
+
+    # 2. Content bounding box
+    min_x, max_x = w, 0
+    min_y, max_y = h, 0
+    for y in range(h):
+        for x in range(w):
+            if img.getpixel((x, y))[3] > 10:
+                if x < min_x: min_x = x
+                if x > max_x: max_x = x
+                if y < min_y: min_y = y
+                if y > max_y: max_y = y
+
+    if max_x <= min_x or max_y <= min_y:
+        reasons.append("empty_frame")
+        return FrameQCResult(False, reasons)
+
+    content_w = max_x - min_x + 1
+    content_h = max_y - min_y + 1
+    content_ratio = (content_w * content_h) / (w * h)
+    aspect = content_w / max(content_h, 1)
+    feet_y = max_y
+    centered_x = (min_x + max_x) // 2
+
+    # 3. Content size check
+    if content_ratio < 0.20:
+        reasons.append(f"too_small:{content_ratio:.2f}")
+
+    # 4. Aspect ratio check
+    if not (min_aspect <= aspect <= max_aspect):
+        reasons.append(f"bad_aspect:{aspect:.2f}")
+
+    # 5. Feet position check
+    if reference_feet_y is not None:
+        if abs(feet_y - reference_feet_y) > max_feet_range:
+            reasons.append(f"feet_off:{feet_y}vs{reference_feet_y}")
+
+    # 6. Off-center check
+    off_center = abs(centered_x - w // 2)
+    if off_center > 12:
+        reasons.append(f"off_center:{off_center}")
+
+    passed = len(reasons) == 0
+    return FrameQCResult(
+        passed=passed,
+        reasons=reasons,
+        content_bbox=(min_x, min_y, max_x, max_y),
+        aspect=aspect,
+        feet_y=feet_y,
+        centered_x=centered_x,
+    )
+
+
+def extract_character_region(img: Image.Image, bbox: tuple, target_size: int) -> Image.Image:
+    """Extract character from bbox and normalize to consistent size/position.
+
+    Crops character from bbox, then pastes into a new frame so the
+    character's feet land at a consistent anchor point.
+    """
+    from PIL import Image as PILImage
+    min_x, min_y, max_x, max_y = bbox
+    content_w = max_x - min_x + 1
+    content_h = max_y - min_y + 1
+
+    # Anchor feet at 85% from top
+    anchor_y = int(target_size * 0.85)
+    feet_offset = max_y - anchor_y  # negative = move up
+
+    # Create normalized frame
+    normalized = PILImage.new("RGBA", (target_size, target_size), (0, 0, 0, 0))
+
+    # Calculate paste position
+    paste_x = (target_size - content_w) // 2
+    paste_y = min_y + feet_offset
+
+    # Clamp to stay within frame
+    paste_x = max(0, min(target_size - content_w, paste_x))
+    paste_y = max(0, min(target_size - content_h, paste_y))
+
+    # Crop and paste
+    char_img = img.crop((min_x, min_y, max_x + 1, max_y + 1))
+    normalized.paste(char_img, (paste_x, paste_y), char_img)
+    return normalized

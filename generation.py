@@ -22,7 +22,10 @@ from generator import (
     generate_frame,
     pixelate_image,
     load_config,
+    validate_frame,
 )
+
+MAX_RETRIES = 3
 from assembler import assemble_spritesheet, generate_gif_from_actions
 
 
@@ -97,21 +100,69 @@ def generate_sprite_sheet(
         # Each frame gets a specific pose description (not "frame 0/4" which FLUX ignores)
         frame_prompts = _build_action_frame_prompts(base, action, style_suffix)
 
+        # Shared reference feet_y: first action's first good frame anchors all others
+        # Stored on the function object for cross-action sharing
+        ref_feet_y = getattr(generate_sprite_sheet, '_ref_feet_y', None)
+        if ref_feet_y is None and action_idx > 0:
+            # Should have been set by first action — warn
+            print(f"  WARNING: no reference feet_y from action 0, using default")
+
         action_imgs = []
         for frame_idx, (pose_desc, full_prompt) in enumerate(frame_prompts):
             print(f"  [{frame_idx+1}/{frames_per_row}] {pose_desc[:60]}...")
-            try:
-                raw = generate_frame(
-                    prompt=full_prompt,
-                    size=512,
-                    config=config,
-                    seed=action_seed,  # same seed for all 4 frames of this action
-                )
-                sprite = pixelate_image(raw, sprite_size)
-                action_imgs.append(sprite)
-            except Exception as e:
-                print(f"  ERROR frame {frame_idx}: {e}")
-                action_imgs.append(None)
+            best_sprite = None
+            best_result = None
+
+            # Determine reference for this frame
+            # First frame of action 0 uses default anchor (55 for 64px)
+            is_first_frame = (action_idx == 0 and frame_idx == 0)
+            frame_ref_feet_y = ref_feet_y  # None means use default in validate_frame
+
+            for attempt in range(MAX_RETRIES):
+                try:
+                    raw = generate_frame(
+                        prompt=full_prompt,
+                        size=512,
+                        config=config,
+                        seed=action_seed + attempt,  # vary seed per attempt
+                    )
+                    sprite = pixelate_image(raw, sprite_size)
+
+                    # QC check (before normalization — raw pixelated frame)
+                    qc = validate_frame(sprite, sprite_size,
+                                       reference_feet_y=frame_ref_feet_y)
+                    if qc.passed:
+                        best_sprite = sprite
+                        best_result = qc
+                        # First good frame sets the reference for ALL subsequent frames
+                        if is_first_frame and ref_feet_y is None:
+                            ref_feet_y = qc.feet_y
+                            generate_sprite_sheet._ref_feet_y = ref_feet_y
+                            print(f"    Reference feet_y={ref_feet_y} set from first frame")
+                        break
+                    else:
+                        print(f"    QC fail ({attempt+1}): {qc.reasons}")
+                except Exception as e:
+                    print(f"    ERROR ({attempt+1}): {e}")
+                    break
+
+            if best_sprite is None:
+                # All retries failed — use best-effort
+                print(f"    WARNING: using best-effort after {MAX_RETRIES} attempts")
+                if 'sprite' in dir():
+                    best_sprite = sprite
+                    best_result = validate_frame(sprite, sprite_size,
+                                               reference_feet_y=frame_ref_feet_y)
+                else:
+                    action_imgs.append(None)
+                    continue
+
+            # Normalize with shared reference feet_y AFTER QC passes
+            normalized = normalize_sprite(best_sprite, sprite_size,
+                                         reference_feet_y=ref_feet_y)
+
+            print(f"    OK: feet_y={best_result.feet_y}, aspect={best_result.aspect:.2f}")
+            action_imgs.append(normalized)
 
         # Save action frames to disk
         frames_dir = Path(config.get("frames_dir", "frames"))
