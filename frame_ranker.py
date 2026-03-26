@@ -7,8 +7,9 @@ import base64
 import io
 import re
 import time
-from PIL import Image
 from typing import List, Optional
+
+from PIL import Image
 
 import ollama
 
@@ -123,28 +124,89 @@ Return ONLY a single number between 0 and 10. No explanation."""
         return 5.0
 
 
+def consensus_score(frames: List[Image.Image]) -> List[float]:
+    """
+    Score frames by how much they agree with each other.
+    Frames that look like outliers (different from the consensus) score lower.
+    Uses simple pixel difference — no numpy needed.
+    """
+    if len(frames) < 2:
+        return [5.0]
+    if len(frames) == 2:
+        return [5.0, 5.0]
+
+    # Resize all to same size for comparison
+    target_size = (16, 16)
+    resized = [f.resize(target_size, Image.Resampling.LANCZOS).convert("L") for f in frames]
+
+    # Compute mean image (consensus) pixel by pixel
+    w, h = target_size
+    mean_pixels: List[List[int]] = [[0] * w for _ in range(h)]
+    for r in resized:
+        for y in range(h):
+            row = list(r.getdata())
+            for x in range(w):
+                mean_pixels[y][x] += row[y * w + x]
+
+    for y in range(h):
+        for x in range(w):
+            mean_pixels[y][x] //= len(resized)
+
+    # Each frame's score = negative distance from mean (closer = higher score)
+    scores: List[float] = []
+    for r in resized:
+        total_diff = 0
+        data = list(r.getdata())
+        for y in range(h):
+            for x in range(w):
+                total_diff += abs(data[y * w + x] - mean_pixels[y][x])
+        # Convert to 0-10 scale: diff=0 → 10, diff=255*16*16 → 0
+        max_diff = 255 * h * w
+        score = max(0.0, min(10.0, 10.0 - (total_diff / max_diff * 10.0)))
+        scores.append(score)
+
+    return scores
+
+
 def select_candidates(
     frames: List[Image.Image],
     action: str,
     model: str = RANKER_MODEL,
 ) -> tuple[int, List[float]]:
     """
-    Rank a list of candidate frames using vision model and return best.
-
-    Args:
-        frames: List of PIL Images (candidates for the same animation frame)
-        action: Animation type (idle, walk, run, attack, etc.)
-        model: Ollama vision model name
-
-    Returns:
-        (best_index, list_of_all_scores)
+    Rank candidate frames using consensus scoring (fast, no GPU).
+    Falls back to per-frame heuristic scoring if vision model available.
+    Vision model scoring takes priority if available and model is ready.
     """
     if not frames:
         raise ValueError("No frames to rank")
     if len(frames) == 1:
-        score = _score_with_vision(frames[0], action, model)
-        return 0, [score]
+        return 0, [5.0]
 
+    # Check if vision model is available
+    vision_available = _vision_model_ready(model)
+
+    if vision_available:
+        # Use vision model (slower but smarter)
+        return _select_with_vision(frames, action, model)
+    else:
+        # Fallback: consensus + heuristic scoring
+        return _select_with_consensus(frames)
+
+
+def _vision_model_ready(model: str) -> bool:
+    """Check if a vision model is loaded and ready."""
+    try:
+        client = _get_client()
+        client.chat(model=model, messages=[{"role": "user", "content": "hi"}],
+                   options={"num_predict": 3})
+        return True
+    except:
+        return False
+
+
+def _select_with_vision(frames, action, model) -> tuple[int, List[float]]:
+    """Use Ollama vision model to score frames."""
     print(f"    [ranker] scoring {len(frames)} candidates ({action}) with {model}...")
     all_scores: List[float] = []
 
@@ -152,11 +214,25 @@ def select_candidates(
         score = _score_with_vision(frame, action, model)
         all_scores.append(score)
         print(f"    [ranker]   candidate {i + 1}: {score:.1f}/10")
-        time.sleep(0.1)  # Brief pause to avoid hammering Ollama
+        time.sleep(0.1)
 
     best_idx = max(range(len(all_scores)), key=lambda i: all_scores[i])
     print(f"    [ranker] → best index: {best_idx} ({all_scores[best_idx]:.1f}/10)")
     return best_idx, all_scores
+
+
+def _select_with_consensus(frames) -> tuple[int, List[float]]:
+    """
+    Fallback: score frames by consensus (outlier detection).
+    Frame most similar to the average gets highest score.
+    """
+    print(f"    [ranker] consensus scoring {len(frames)} candidates (no vision model)...")
+    scores = consensus_score(frames)
+    for i, s in enumerate(scores):
+        print(f"    [ranker]   candidate {i + 1}: {s:.1f}/10")
+    best_idx = max(range(len(scores)), key=lambda i: scores[i])
+    print(f"    [ranker] → best index: {best_idx} ({scores[best_idx]:.1f}/10)")
+    return best_idx, scores
 
 
 # ─── CLI test ────────────────────────────────────────────────────────────────
