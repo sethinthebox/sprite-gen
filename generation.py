@@ -1,6 +1,7 @@
 """Generation orchestration layer — coordinates the full sprite generation pipeline."""
 
 import json
+import os
 import time
 import uuid
 import random
@@ -27,6 +28,20 @@ from generator import (
 )
 
 MAX_RETRIES = 3
+
+# Frame ranker: use vision model when available, QC rules as fallback
+try:
+    from frame_ranker import select_candidates, select_best, qc_score
+    RANKER_AVAILABLE = True
+except Exception as e:
+    print(f"  [ranker] could not import: {e}")
+    RANKER_AVAILABLE = False
+    select_candidates = None
+    qc_score = None
+
+# Number of candidate frames to generate per animation frame
+# More candidates = better selection, slower generation
+N_CANDIDATES = int(os.environ.get("FRAME_N_CANDIDATES", "3")) if os.environ.get("FRAME_N_CANDIDATES") else 3
 from assembler import assemble_spritesheet, generate_gif_from_actions
 
 
@@ -111,58 +126,78 @@ def generate_sprite_sheet(
         action_imgs = []
         for frame_idx, (pose_desc, full_prompt) in enumerate(frame_prompts):
             print(f"  [{frame_idx+1}/{frames_per_row}] {pose_desc[:60]}...")
-            best_sprite = None
-            best_result = None
-
-            # Determine reference for this frame
-            # First frame of action 0 uses default anchor (55 for 64px)
             is_first_frame = (action_idx == 0 and frame_idx == 0)
-            frame_ref_feet_y = ref_feet_y  # None means use default in validate_frame
+            frame_ref_feet_y = ref_feet_y  # None = use default in validate_frame
 
-            for attempt in range(MAX_RETRIES):
+            # ── Generate N candidate frames ────────────────────────────────────
+            # Generate multiple candidates and pick the best via vision model
+            candidates: List[tuple] = []  # (sprite_img, qc_result, seed)
+
+            for cand_idx in range(N_CANDIDATES):
                 try:
+                    seed = action_seed + cand_idx
                     raw = generate_frame(
                         prompt=full_prompt,
                         size=512,
                         config=config,
-                        seed=action_seed + attempt,  # vary seed per attempt
+                        seed=seed,
                     )
                     sprite = pixelate_image(raw, sprite_size)
-
-                    # QC check (before normalization — raw pixelated frame)
                     qc = validate_frame(sprite, sprite_size,
-                                       reference_feet_y=frame_ref_feet_y)
+                                      reference_feet_y=frame_ref_feet_y)
+                    candidates.append((sprite, qc, seed))
                     if qc.passed:
-                        best_sprite = sprite
-                        best_result = qc
-                        # First good frame sets the reference for ALL subsequent frames
-                        if is_first_frame and ref_feet_y is None:
-                            ref_feet_y = qc.feet_y
-                            generate_sprite_sheet._ref_feet_y = ref_feet_y
-                            print(f"    Reference feet_y={ref_feet_y} set from first frame")
-                        break
+                        print(f"    candidate {cand_idx+1}: QC passed (feet={qc.feet_y})")
                     else:
-                        print(f"    QC fail ({attempt+1}): {qc.reasons}")
+                        print(f"    candidate {cand_idx+1}: QC fail — {qc.reasons}")
                 except Exception as e:
-                    print(f"    ERROR ({attempt+1}): {e}")
-                    break
+                    print(f"    candidate {cand_idx+1}: ERROR — {e}")
 
-            if best_sprite is None:
-                # All retries failed — use best-effort
-                print(f"    WARNING: using best-effort after {MAX_RETRIES} attempts")
-                if 'sprite' in dir():
-                    best_sprite = sprite
-                    best_result = validate_frame(sprite, sprite_size,
-                                               reference_feet_y=frame_ref_feet_y)
-                else:
-                    action_imgs.append(None)
-                    continue
+            if not candidates:
+                print(f"    WARNING: no candidates generated, skipping")
+                action_imgs.append(None)
+                continue
 
-            # Normalize with shared reference feet_y AFTER QC passes
+            # ── Set reference feet_y from first good candidate of first frame ─
+            if is_first_frame and ref_feet_y is None:
+                good = next((c for c in candidates if c[1].passed), None)
+                if good:
+                    ref_feet_y = good[1].feet_y
+                    generate_sprite_sheet._ref_feet_y = ref_feet_y
+                    print(f"    Reference feet_y={ref_feet_y} set")
+
+            # ── Select best candidate ─────────────────────────────────────────
+            best_sprite = None  # type: ignore
+            best_result = None  # type: ignore
+            if len(candidates) == 1:
+                best_sprite, best_result, _ = candidates[0]
+            elif RANKER_AVAILABLE and select_candidates is not None:
+                # Use vision model to pick best (override QC scores with ranker assessment)
+                imgs = [c[0] for c in candidates]
+                try:
+                    best_idx, ranker_scores = select_candidates(imgs, action)
+                    # Override QC scores with ranker scores and pick best
+                    for i, (c, ranker_score) in enumerate(zip(candidates, ranker_scores)):
+                        c[1].score = ranker_score  # c[1] is the QCResult (mutable)
+                    best_idx, _ = max(enumerate(ranker_scores), key=lambda x: x[1])
+                    best_sprite, best_result, _ = candidates[best_idx]
+                    print(f"    [ranker] → selected (score={best_result.score:.1f})")
+                except Exception as e:
+                    print(f"    [ranker] fallback to QC: {e}")
+                    scores = [(i, c[1].score) for i, c in enumerate(candidates)]
+                    best_idx = max(scores, key=lambda x: x[1])[0]
+                    best_sprite, best_result, _ = candidates[best_idx]
+            else:
+                # No ranker: pick best QC score
+                scores = [(i, c[1].score) for i, c in enumerate(candidates)]
+                best_idx = max(scores, key=lambda x: x[1])[0]
+                best_sprite, best_result, _ = candidates[best_idx]
+
+            # ── Normalize with shared reference after selection ───────────────
             normalized = normalize_sprite(best_sprite, sprite_size,
                                          reference_feet_y=ref_feet_y)
 
-            print(f"    OK: feet_y={best_result.feet_y}, aspect={best_result.aspect:.2f}")
+            print(f"    → selected (QC={best_result.score:.1f}, feet={best_result.feet_y})")
             action_imgs.append(normalized)
 
         # Save action frames to disk

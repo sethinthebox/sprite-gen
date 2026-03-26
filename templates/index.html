@@ -599,6 +599,232 @@ input[type="range"] {
   flex-wrap: wrap;
   gap: 8px;
 }
+
+/* ─── Sprite Sheet Pro ─────────────────────────────────────────────────────── */
+.spro-wrap {
+  height: calc(100vh - 57px);
+  overflow: hidden;
+}
+.spro-layout {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  height: 100%;
+  gap: 0;
+}
+.spro-sidebar {
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.spro-sidebar::-webkit-scrollbar { width: 4px; }
+.spro-sidebar::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+.spro-main {
+  overflow-y: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.spro-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.spro-label {
+  font-size: 0.72em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.spro-input, .spro-select, .spro-textarea {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 7px 9px;
+  font-size: 0.83em;
+  width: 100%;
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.15s;
+}
+.spro-input:focus, .spro-select:focus, .spro-textarea:focus { border-color: var(--accent); }
+.spro-textarea { min-height: 72px; resize: vertical; }
+
+/* Direction toggle */
+.dir-row { display: flex; gap: 4px; margin-top: 4px; }
+.dir-btn {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  font-size: 0.75em;
+  padding: 5px 2px;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s;
+}
+.dir-btn:hover { border-color: var(--accent); color: var(--text); }
+.dir-btn.active { background: var(--accent-glow); border-color: var(--accent); color: var(--accent); }
+
+/* Char presets */
+.char-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.char-chip {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  color: var(--text-dim);
+  font-size: 0.68em;
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.char-chip:hover { border-color: var(--accent); color: var(--text); }
+.char-chip.active { background: var(--accent-glow); border-color: var(--accent); color: var(--accent); }
+
+/* Item grid */
+.item-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 4px; }
+.item-opt {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  font-size: 0.7em;
+  padding: 5px 6px;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s;
+}
+.item-opt:hover { border-color: var(--accent); color: var(--text); }
+.item-opt.active { background: var(--accent-glow); border-color: var(--accent); color: var(--accent); }
+
+/* Toggle */
+.spro-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 0;
+}
+.spro-toggle-label { font-size: 0.8em; color: var(--text); }
+.spro-toggle-desc { font-size: 0.68em; color: var(--text-muted); margin-top: 1px; }
+.toggle-switch {
+  position: relative; width: 34px; height: 18px; flex-shrink: 0;
+}
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-slider {
+  position: absolute; inset: 0; background: var(--border2);
+  border-radius: 10px; cursor: pointer; transition: 0.2s;
+}
+.toggle-slider::before {
+  content: ''; position: absolute; width: 12px; height: 12px;
+  left: 3px; top: 3px; background: white; border-radius: 50%; transition: 0.2s;
+}
+.toggle-switch input:checked + .toggle-slider { background: var(--accent); }
+.toggle-switch input:checked + .toggle-slider::before { transform: translateX(16px); }
+
+/* Generate button */
+.spro-gen-btn {
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius);
+  color: white;
+  font-size: 0.9em;
+  font-weight: 600;
+  padding: 11px;
+  cursor: pointer;
+  width: 100%;
+  transition: all 0.15s;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+}
+.spro-gen-btn:hover:not(:disabled) { background: var(--accent2); transform: translateY(-1px); }
+.spro-gen-btn:disabled { background: var(--border); color: var(--text-muted); cursor: not-allowed; }
+
+/* Seed display */
+.spro-seeds {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 7px 9px;
+  font-size: 0.72em;
+  font-family: monospace;
+  word-break: break-all;
+  max-height: 80px;
+  overflow-y: auto;
+}
+
+/* Preview */
+.spro-preview-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.spro-preview-box img {
+  max-width: 100%;
+  image-rendering: pixelated;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.spro-dl-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.spro-dl-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 0.75em;
+  padding: 5px 12px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.spro-dl-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Progress overlay */
+.spro-prog-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.75);
+  z-index: 9999;
+  align-items: center; justify-content: center;
+}
+.spro-prog-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  min-width: 300px;
+  text-align: center;
+}
+.spro-prog-msg { font-size: 0.95em; margin-bottom: 10px; }
+.spro-prog-bar {
+  background: var(--border);
+  border-radius: 6px;
+  height: 8px;
+  overflow: hidden;
+}
+.spro-prog-fill {
+  background: var(--accent);
+  height: 100%;
+  width: 0%;
+  transition: width 0.3s;
+}
+.spro-prog-detail { font-size: 0.72em; color: var(--text-dim); margin-top: 6px; }
+
+/* Empty state */
+.spro-empty {
+  color: var(--text-dim);
+  font-size: 0.85em;
+  text-align: center;
+  padding: 40px 20px;
+  line-height: 1.6;
+}
 </style>
 <script>window.BASE_URL = "";</script></head>
 <body>
@@ -608,6 +834,7 @@ input[type="range"] {
   <div class="logo">🎨 <span>SpriteGen</span> Pro</div>
   <div class="tabs">
     <button class="tab-btn active" data-tab="generate">Generate</button>
+    <button class="tab-btn" data-tab="spro">Sprite Sheet Pro</button>
     <button class="tab-btn" data-tab="log">History</button>
     <button class="tab-btn" data-tab="settings">Settings</button>
   </div>
@@ -811,6 +1038,161 @@ input[type="range"] {
 
   </div><!-- /center -->
 </div><!-- /main-layout -->
+
+<!-- Sprite Sheet Pro Tab -->
+<div id="tab-spro" style="display:none; height: calc(100vh - 57px);">
+  <div class="spro-layout">
+
+    <!-- LEFT SIDEBAR -->
+    <div class="spro-sidebar">
+
+      <div class="panel">
+        <div class="panel-title">🎭 Character</div>
+        <textarea class="spro-textarea" id="spro-char" placeholder="Describe your character...">isometric pixel art older businessman, late 50s, gray temples, salt and pepper hair, pristine navy suit, white shirt, red tie, polished shoes</textarea>
+        <div class="char-chips">
+          <button class="char-chip" onclick="sproSetChar(this.textContent)">Businessman</button>
+          <button class="char-chip" onclick="sproSetChar(this.textContent)">Soldier</button>
+          <button class="char-chip" onclick="sproSetChar(this.textContent)">Ninja</button>
+          <button class="char-chip" onclick="sproSetChar(this.textContent)">Knight</button>
+          <button class="char-chip" onclick="sproSetChar(this.textContent)">Robot</button>
+          <button class="char-chip" onclick="sproSetChar(this.textContent)">Wizard</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">🎒 Held Item</div>
+        <select class="spro-select" id="spro-item">
+          <option value="holding briefcase">Briefcase</option>
+          <option value="holding combat knife">Combat Knife</option>
+          <option value="holding pistol">Pistol</option>
+          <option value="holding rifle">Rifle</option>
+          <option value="holding shotgun">Shotgun</option>
+          <option value="holding sword">Sword</option>
+          <option value="holding katana">Katana</option>
+          <option value="holding axe">Axe</option>
+          <option value="holding torch">Torch</option>
+          <option value="holding lantern">Lantern</option>
+          <option value="holding shield">Shield</option>
+          <option value="holding wand">Wand</option>
+          <option value="holding staff">Staff</option>
+          <option value="holding book">Book</option>
+          <option value="holding cup">Cup</option>
+          <option value="bare handed">Bare Handed</option>
+        </select>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">🎬 Animation</div>
+        <select class="spro-select" id="spro-anim" onchange="sproUpdatePreview()">
+          <option value="idle">Idle / Standing</option>
+          <option value="walk" selected>Walk Cycle</option>
+          <option value="run">Run Cycle</option>
+          <option value="attack">Attack / Strike</option>
+          <option value="hurt">Hurt / Hit</option>
+          <option value="die">Death</option>
+          <option value="jump">Jump</option>
+          <option value="cast">Cast / Spell</option>
+          <option value="dance">Dance</option>
+        </select>
+
+        <div class="spro-field" style="margin-top:8px;">
+          <div class="spro-label">Directions</div>
+          <div class="dir-row">
+            <button class="dir-btn" data-dirs="4" onclick="sproSetDirs(4)">4-Dir</button>
+            <button class="dir-btn active" data-dirs="8" onclick="sproSetDirs(8)">8-Dir</button>
+          </div>
+        </div>
+
+        <div class="spro-field" style="margin-top:8px;">
+          <div class="spro-label">Frames per Direction</div>
+          <select class="spro-select" id="spro-frames" onchange="sproUpdatePreview()">
+            <option value="4" selected>4 frames</option>
+            <option value="6">6 frames</option>
+            <option value="8">8 frames</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">⚙️ Technical</div>
+
+        <div class="spro-field">
+          <div class="spro-label">Sprite Size</div>
+          <select class="spro-select" id="spro-size" onchange="sproUpdatePreview()">
+            <option value="32">32×32 Retro</option>
+            <option value="48">48×48</option>
+            <option value="64" selected>64×64 Standard</option>
+            <option value="96">96×96 Large</option>
+            <option value="128">128×128 HD</option>
+          </select>
+        </div>
+
+        <div class="spro-field" style="margin-top:8px;">
+          <div class="spro-label">FLUX Model</div>
+          <select class="spro-select" id="spro-model">
+            <option value="schnell" selected>FLUX Schnell (Fast)</option>
+            <option value="dev">FLUX Dev (Better)</option>
+          </select>
+        </div>
+
+        <div class="spro-field" style="margin-top:8px;">
+          <div class="spro-label">Reference Image</div>
+          <select class="spro-select" id="spro-ref">
+            <option value="">None</option>
+            <option value="img2img">Use Uploaded Reference</option>
+          </select>
+        </div>
+
+        <div class="spro-toggle" style="margin-top:8px;">
+          <div>
+            <div class="spro-toggle-label">Reproducible</div>
+            <div class="spro-toggle-desc">Same seed = same character</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="spro-use-seed" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="spro-field" style="margin-top:8px;">
+          <div class="spro-label">Seed Value</div>
+          <input type="number" class="spro-input" id="spro-seed" placeholder="Random if blank">
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">📊 Output</div>
+        <div id="spro-output-preview" style="font-size:0.78em;color:var(--text-dim);background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;">
+          8 directions × 4 frames = <strong>32 total frames</strong><br>
+          Sheet: <strong>512×256px</strong> at 64×64 per frame
+        </div>
+      </div>
+
+      <button class="spro-gen-btn" id="spro-gen-btn" onclick="sproGenerate()">
+        ✨ Generate Sprite Sheet
+      </button>
+
+      <div id="spro-seed-display" style="display:none;margin-top:8px;">
+        <div class="spro-field">
+          <div class="spro-label">Seeds (save to reproduce)</div>
+          <div class="spro-seeds" id="spro-seeds-content"></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT: Preview -->
+    <div class="spro-main">
+      <div id="spro-preview-area">
+        <div class="spro-empty" style="color:var(--text-dim);font-size:0.85em;text-align:center;padding:40px 20px;line-height:1.6;">
+          Generate a sprite sheet to see preview here.<br>
+          Each row = one direction. Each column = animation frame.
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
 
 <script>
 // ─── State ────────────────────────────────────────────────────────────────────

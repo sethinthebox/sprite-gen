@@ -377,6 +377,12 @@ class FrameQCResult:
         self.aspect = aspect
         self.feet_y = feet_y
         self.centered_x = centered_x
+        # Score 0-10 derived from QC state
+        self.score: float = 0.0 if not passed else 7.0  # base score for passed frames
+
+    def set_score(self, score: float):
+        """Set the score (used by external ranker)."""
+        self.score = max(0.0, min(10.0, score))
 
 
 def validate_frame(img: Image.Image, target_size: int = 64,

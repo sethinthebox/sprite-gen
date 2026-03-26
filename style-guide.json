@@ -1,4 +1,6 @@
 {
   "current": "",
-  "presets": {}
+  "presets": {
+    "hellport": "for the game hellport, an apocalyptic airport survival game."
+  }
 }
