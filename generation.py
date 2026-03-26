@@ -167,6 +167,7 @@ def generate_sprite_sheet(
             {"name": a, "frames": list(range(i * frames_per_row, (i + 1) * frames_per_row))}
             for i, a in enumerate(actions)
         ],
+        "action_seeds": {action: seeds[i] for i, action in enumerate(actions)},
         "elapsed_seconds": round(elapsed, 2),
     }
 
