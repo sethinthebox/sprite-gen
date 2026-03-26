@@ -144,14 +144,14 @@ def generate_gif(
     Returns:
         The output path if the file was saved, else None.
     """
+    # Black background for GIF (transparent → black, not checkerboard)
+    BLACK = (0, 0, 0)
     gif_frames = []
     for path in frame_paths:
         img = Image.open(path).convert("RGBA")
-        if img.mode != "RGB":
-            background = Image.new("RGB", img.size, (0, 0, 0))
-            background.paste(img, mask=img.split()[3])
-            img = background
-        gif_frames.append(img)
+        background = Image.new("RGB", img.size, BLACK)
+        background.paste(img, mask=img.split()[3])  # composite alpha on black
+        gif_frames.append(background)
 
     if not gif_frames:
         return None
@@ -164,6 +164,56 @@ def generate_gif(
         save_all=True,
         append_images=gif_frames[1:],
         duration=delay,
+        loop=loop,
+        optimize=False,
+    )
+
+    return str(output_path) if output_path.exists() else None
+
+
+def generate_gif_from_actions(
+    action_frames: List[Tuple[str, List[str]]],
+    output_path: str,
+    delay_per_frame: int = 100,
+    loop: int = 0,
+) -> Optional[str]:
+    """Build an animated GIF that cycles through all actions.
+
+    For each action in order, plays its 4 frames, then moves to the next
+    action — giving a complete overview of all animations in the sheet.
+
+    Transparent pixels are composited over a black background.
+
+    Args:
+        action_frames: List of (action_name, [frame_paths]) tuples.
+        output_path: Destination path for the GIF file.
+        delay_per_frame: Display time per frame in milliseconds.
+        loop: Loop count (0 = infinite).
+
+    Returns:
+        The output path if the file was saved, else None.
+    """
+    gif_frames = []
+    BLACK = (0, 0, 0)
+
+    for action_name, frame_paths in action_frames:
+        for path in frame_paths:
+            img = Image.open(path).convert("RGBA")
+            background = Image.new("RGB", img.size, BLACK)
+            background.paste(img, mask=img.split()[3])
+            gif_frames.append(background)
+
+    if not gif_frames:
+        return None
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    gif_frames[0].save(
+        str(output_path),
+        save_all=True,
+        append_images=gif_frames[1:],
+        duration=delay_per_frame,
         loop=loop,
         optimize=False,
     )

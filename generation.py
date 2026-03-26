@@ -25,7 +25,7 @@ from generator import (
     save_frames,
     load_config,
 )
-from assembler import assemble_spritesheet, generate_gif
+from assembler import assemble_spritesheet, generate_gif_from_actions
 
 
 DEFAULT_STYLE_PATH = Path(__file__).parent / "defaults" / "style-guide-default.json"
@@ -122,9 +122,9 @@ def generate_sprite_sheet(
 
     # 8. Generate GIF preview — cycle through first action's frames for a quick preview
     gif_path = output_dir / f"{output_name}.gif"
-    # Use the idle (first action) frames for GIF if available, else all frames
-    preview_frames = frame_paths[:frames_per_row] if action_frames else frame_paths
-    gif_result = generate_gif(preview_frames, str(gif_path), delay=120, loop=0)
+    # Generate GIF that cycles through all actions
+    gif_path = output_dir / f"{output_name}.gif"
+    gif_result = generate_gif_from_actions(action_frames, str(gif_path), delay_per_frame=120, loop=0)
 
     # 9. Log
     elapsed = time.time() - start_time

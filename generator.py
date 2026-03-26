@@ -88,11 +88,15 @@ def generate_frame(
 
 # ── Pixel art conversion ───────────────────────────────────────────────────────
 
-def _remove_background(img: Image.Image, threshold: int = 30) -> Image.Image:
-    """Remove solid-color background from a sprite image.
+def _remove_background(img: Image.Image, threshold: int = 15) -> Image.Image:
+    """Remove near-white/solid background from a sprite image.
 
     Samples the four corners to detect the background color, then
     sets any pixel matching that color (within threshold) to transparent.
+    Uses per-pixel max channel distance — more accurate than RGB distance.
+
+    Only removes background that is VERY close to the corner sample
+    (threshold=15 in 0-255 scale) to avoid eating into dark characters.
 
     Args:
         img: PIL Image in RGBA mode.
@@ -104,7 +108,7 @@ def _remove_background(img: Image.Image, threshold: int = 30) -> Image.Image:
     if img.mode != "RGBA":
         img = img.convert("RGBA")
 
-    # Sample background from corners (background is almost always at edges)
+    # Sample background from corners
     w, h = img.size
     corners = [
         img.getpixel((0, 0)),
@@ -122,21 +126,29 @@ def _remove_background(img: Image.Image, threshold: int = 30) -> Image.Image:
     corner_rgbas = [c[:4] for c in corners]
     bg_rgba = Counter(corner_rgbas).most_common(1)[0][0]
 
-    # Build a clean alpha channel
-    if img.mode == "RGBA":
-        r, g, b, existing_alpha = img.split()
-    else:
-        r, g, b = img.split()
-        existing_alpha = Image.new("L", img.size, 255)
-
+    # Only proceed if the background is actually light/neutral
+    # If corners are dark (character fills frame), skip removal entirely
     bg_r, bg_g, bg_b = bg_rgba[0], bg_rgba[1], bg_rgba[2]
-    new_alpha = Image.new("L", img.size, 0)
+    bg_brightness = (bg_r + bg_g + bg_b) / 3
+    if bg_brightness < 40:
+        # Dark background — likely a dark scene, don't remove
+        return img
+
+    # Build a clean alpha channel using per-channel max distance
+    r, g, b, _ = img.split()
+
+    new_alpha = Image.new("L", img.size, 255)  # default: opaque
 
     for y in range(h):
         for x in range(w):
             px_r, px_g, px_b = r.getpixel((x, y)), g.getpixel((x, y)), b.getpixel((x, y))
-            dist = max(abs(px_r - bg_r), abs(px_g - bg_g), abs(px_b - bg_b))
-            new_alpha.putpixel((x, y), 255 if dist >= threshold else 0)
+            # Only transparent if ALL channels are close to background AND bg is light
+            if (abs(px_r - bg_r) <= threshold and
+                abs(px_g - bg_g) <= threshold and
+                abs(px_b - bg_b) <= threshold):
+                new_alpha.putpixel((x, y), 0)  # transparent
+            else:
+                new_alpha.putpixel((x, y), 255)  # opaque
 
     return Image.merge("RGBA", (r, g, b, new_alpha))
 
