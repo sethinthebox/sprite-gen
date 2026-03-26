@@ -4,7 +4,7 @@
 import json, time, traceback, uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from flask import Flask, request, jsonify, render_template, send_file
+from flask import Flask, request, jsonify, render_template, send_file, make_response
 
 from generation import generate_sprite_sheet
 from generator import load_config
@@ -76,6 +76,10 @@ def _ensure_default_templates():
 @app.route("/")
 def index():
     response = make_response(render_template("index.html"))
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
