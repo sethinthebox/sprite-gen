@@ -88,20 +88,74 @@ def generate_frame(
 
 # ── Pixel art conversion ───────────────────────────────────────────────────────
 
+def _remove_background(img: Image.Image, threshold: int = 30) -> Image.Image:
+    """Remove solid-color background from a sprite image.
+
+    Samples the four corners to detect the background color, then
+    sets any pixel matching that color (within threshold) to transparent.
+
+    Args:
+        img: PIL Image in RGBA mode.
+        threshold: Color distance tolerance for background matching.
+
+    Returns:
+        PIL Image with transparent background, RGBA mode.
+    """
+    if img.mode != "RGBA":
+        img = img.convert("RGBA")
+
+    # Sample background from corners (background is almost always at edges)
+    w, h = img.size
+    corners = [
+        img.getpixel((0, 0)),
+        img.getpixel((w - 1, 0)),
+        img.getpixel((0, h - 1)),
+        img.getpixel((w - 1, h - 1)),
+        img.getpixel((w // 2, 0)),
+        img.getpixel((w // 2, h - 1)),
+        img.getpixel((0, h // 2)),
+        img.getpixel((w - 1, h // 2)),
+    ]
+
+    # Find the most common corner color (likely the background)
+    from collections import Counter
+    corner_rgbas = [c[:4] for c in corners]
+    bg_rgba = Counter(corner_rgbas).most_common(1)[0][0]
+
+    # Build a clean alpha channel
+    if img.mode == "RGBA":
+        r, g, b, existing_alpha = img.split()
+    else:
+        r, g, b = img.split()
+        existing_alpha = Image.new("L", img.size, 255)
+
+    bg_r, bg_g, bg_b = bg_rgba[0], bg_rgba[1], bg_rgba[2]
+    new_alpha = Image.new("L", img.size, 0)
+
+    for y in range(h):
+        for x in range(w):
+            px_r, px_g, px_b = r.getpixel((x, y)), g.getpixel((x, y)), b.getpixel((x, y))
+            dist = max(abs(px_r - bg_r), abs(px_g - bg_g), abs(px_b - bg_b))
+            new_alpha.putpixel((x, y), 255 if dist >= threshold else 0)
+
+    return Image.merge("RGBA", (r, g, b, new_alpha))
+
+
 def pixelate_image(image_bytes: bytes, target_size: int) -> Image.Image:
     """Convert an AI-generated image to a pixel art sprite.
 
-    Does two things:
+    Does three things:
     1. Resize down to target_size × target_size using nearest-neighbor
        (preserves hard pixel edges — no smoothing).
-    2. Apply a mild sharpen to crisp up the pixel boundaries.
+    2. Sharpen to recover crispness after resize.
+    3. Remove solid background, replacing it with transparency.
 
     Args:
         image_bytes: Raw PNG/JPEG bytes from the API.
         target_size: Target sprite dimension in pixels (e.g. 64 = 64×64).
 
     Returns:
-        PIL Image in RGBA mode.
+        PIL Image in RGBA mode with transparent background.
     """
     img = Image.open(io.BytesIO(image_bytes)).convert("RGBA")
 
@@ -113,6 +167,9 @@ def pixelate_image(image_bytes: bytes, target_size: int) -> Image.Image:
 
     # Sharpen slightly to recover crispness after resize
     img_small = img_small.filter(ImageFilter.SHARPEN)
+
+    # Remove solid background (FLUX doesn't generate true alpha)
+    img_small = _remove_background(img_small)
 
     return img_small
 
@@ -174,9 +231,20 @@ def generate_batch(
         config = load_config()
 
     results = []
+    errors = []
     for action_name, prompt in frames:
-        raw_bytes = generate_frame(prompt, size=size, config=config)
-        img = pixelate_image(raw_bytes, size)
-        results.append((action_name, img))
+        try:
+            raw_bytes = generate_frame(prompt, size=size, config=config)
+            img = pixelate_image(raw_bytes, size)
+            results.append((action_name, img))
+        except Exception as exc:
+            errors.append({"action": action_name, "prompt": prompt[:80], "error": str(exc)})
+            # Append None as placeholder so results align with input
+            results.append((action_name, None))
+
+    if errors:
+        # Log but don't abort — partial results are still useful
+        for e in errors:
+            print(f"[generate_batch] ERROR for '{e['action']}': {e['error']}")
 
     return results

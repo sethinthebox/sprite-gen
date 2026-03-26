@@ -561,28 +561,39 @@ def list_actions():
 
 @app.route("/rebuild-sheet", methods=["POST"])
 def rebuild_sheet():
-    """Rebuild sprite sheet from existing frames in frames/ directory."""
+    """Rebuild sprite sheet from existing numbered frames in frames/ directory."""
     data = request.get_json() or {}
-    grid_size = int(data.get("grid_size", 4))
+    grid_size = int(data.get("grid_size", 4))  # frames per row
     output_name = data.get("output_name", f"rebuild_{int(time.time())}")
 
+    # Collect numbered frames in order
     frame_paths = sorted([str(p) for p in FRAMES_DIR.glob("frame_*.png")])
     if not frame_paths:
         return jsonify({"error": "No frames found"}), 400
 
+    # Convert flat frame list to action_frames format (one unnamed action)
+    # Assumes frames are sequential: 000,001,002... grouped by grid_size
+    action_frames = [(f"row_{i//grid_size}", frame_paths[i:i+grid_size])
+                     for i in range(0, len(frame_paths), grid_size)]
+    action_frames = [(name, paths) for name, paths in action_frames if len(paths) == grid_size]
+
+    if not action_frames:
+        return jsonify({"error": f"Need {grid_size} frames to build a row"}), 400
+
     result = assemble_spritesheet(
-        frame_paths=frame_paths,
-        grid_size=grid_size,
+        action_frames=action_frames,
         output_name=output_name,
+        frame_size=64,
+        frames_per_row=grid_size,
+        output_dir=str(OUTPUT_DIR),
     )
 
-    gif_path = OUTPUT_DIR / f"{output_name}.gif"
-    gif_result = generate_gif(frame_paths, str(gif_path), delay=100)
+    gif_result = generate_gif(frame_paths, str(OUTPUT_DIR / f"{output_name}.gif"), delay=100)
 
     return jsonify({
         "status": "ok",
         "sheet_url": f"/output/{Path(result['sheet_path']).name}",
-        "gif_url": f"/output/{gif_path.name}" if gif_result else None,
+        "gif_url": f"/output/{output_name}.gif" if gif_result else None,
         "frame_urls": [f"/frames/{Path(p).name}" for p in frame_paths],
     })
 

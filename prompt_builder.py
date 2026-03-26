@@ -195,8 +195,8 @@ def suggest_improvements(
             improved = result.get("response", "").strip().strip('"')
             if improved and 5 < len(improved) < 500:
                 return improved
-    except Exception:
-        pass
+    except (requests.RequestException, ValueError, KeyError) as exc:
+        print(f"[suggest_improvements] API error: {exc}")
 
     return prompt
 
