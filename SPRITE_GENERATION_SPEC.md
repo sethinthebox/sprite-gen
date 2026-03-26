@@ -237,3 +237,111 @@ airport terminal setting, dark atmospheric lighting
 This spec created: 2026-03-25
 For project: Hellport Game
 Location: /mnt/d/openclaw-workspaces/theassistant/hellport-assets/
+
+---
+
+## 8-Directional Isometric Sprite Sheet Format
+
+### Game Context: Hellport
+Isometric airport survival game. Characters walk in 8 directions (N/NE/E/SE/S/SW/W/NW). Standard sprite sheet format per character.
+
+### Structure Per Character
+
+| What | Frames | Notes |
+|------|--------|-------|
+| **Idle** | 1-4 | Standing still, subtle breathing |
+| **Walk per direction** | 4-8 per direction × 8 directions = 32-64 frames | Core animation |
+| **Run per direction** | 4-8 per direction × 8 directions | Faster animation |
+| **Hurt/Death** | 4-6 | Universal (no direction needed) |
+
+### Sprite Sheet Layout
+
+**Walk cycle format** — columns = directions, rows = frames within animation:
+
+```
+        N       NE      E       SE      S       SW      W       NW
+Frame0  [N_f0]  [NE_f0] [E_f0]  [SE_f0] [S_f0]  [SW_f0] [W_f0]  [NW_f0]
+Frame1  [N_f1]  [NE_f1] [E_f1]  [SE_f1] [S_f1]  [SW_f1] [W_f1]  [NW_f1]
+Frame2  [N_f2]  [NE_f2] [E_f2]  [SE_f2] [S_f2]  [SW_f2] [W_f2]  [NW_f2]
+Frame3  [N_f3]  [NE_f3] [E_f3]  [SE_f3] [S_f3]  [SW_f3] [W_f3]  [NW_f3]
+```
+
+### Per-Frame Prompt Structure
+
+Each frame is a **separate API call** with:
+1. **Base character** — same for all frames
+2. **Direction** — which way the character faces
+3. **Animation phase** — which step in the walk cycle
+4. **Shared seed** — for character consistency
+
+### Critical Rule: One API Call Per Frame
+
+FLUX CANNOT generate multiple animation frames in one call and maintain consistency. 
+Each frame MUST be a separate API call.
+
+**OLD (broken):** One prompt = 4 frames generated = all identical
+**NEW (correct):** One prompt = 1 frame = repeat 32 times with same seed + different poses
+
+### Standard Walk Cycle Poses (4 frames)
+
+These are direction-agnostic base poses — add direction descriptor:
+
+| Frame | Left Leg | Right Leg | Left Arm | Right Arm |
+|-------|----------|-----------|----------|-----------|
+| 0 | Lifted back | Planted | Back | Forward |
+| 1 | Forward | Passing | Forward | Back |
+| 2 | Planted | Passing | Neutral | Neutral |
+| 3 | Passing | Lifted back | Back | Forward |
+
+### Direction Descriptors
+
+| Direction | Facing Description |
+|----------|-------------------|
+| N | Back to viewer, walking away |
+| NE | Back-right to viewer |
+| E | Side profile (left arm visible), walking right |
+| SE | Front-right to viewer |
+| S | Front to viewer, walking toward |
+| SW | Front-left to viewer |
+| W | Side profile (right arm visible), walking left |
+| NW | Back-left to viewer |
+
+### Prompt Template
+
+```
+[BASE_CHARACTER], [DIRECTION_DESCRIPTOR], [WALK_POSE_DESCRIPTOR]
+```
+
+Example full prompt:
+```
+isometric pixel art older businessman, late 50s, gray temples, pristine navy suit, white shirt, red tie, holding briefcase, walking east, side profile facing right, left foot lifted, right arm forward, mid-stride pose, clean retro pixel art, no background
+```
+
+### Seed Strategy
+
+- **Base seed** per character (e.g., `777001`)
+- **Per-direction seed**: `base + direction_index` (ensures consistent facing per direction)
+- **Per-frame seed**: `direction_seed + frame_index` (ensures pose variation)
+
+### Frame Generation Loop (Pseudocode)
+
+```
+base_seed = random()
+for direction in DIRECTIONS:
+    direction_seed = base_seed + direction_index
+    for frame in WALK_FRAMES:
+        frame_seed = direction_seed + frame_index
+        prompt = build_prompt(base_character, direction, frame)
+        generate(prompt, seed=frame_seed)
+```
+
+### Recommended Sprite Sizes
+
+| Game Type | Frame Size | Sheet Size (4 frames × 8 dirs) |
+|-----------|-----------|--------------------------------|
+| Retro/Pixel | 32×32 | 128×128 |
+| Standard RPG | 64×64 | 256×256 |
+| High-detail | 96×96 | 384×384 |
+
+### Ollama Status
+Ollama is installed but no models are loaded. Not currently used. Can be enabled for prompt improvement if needed.
