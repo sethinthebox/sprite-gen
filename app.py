@@ -18,6 +18,9 @@ BASE = Path(__file__).parent
 OUTPUT_DIR = BASE / "output"
 FRAMES_DIR = BASE / "frames"
 REF_DIR = BASE / "reference-library"
+
+# URL prefix for deployment (Flask runs behind nginx at /sprite/)
+SPRITE_PREFIX = "/sprite"
 TEMPLATES_DIR = BASE / "prompt-templates"
 STYLE_GUIDE_FILE = BASE / "style-guide.json"
 GEN_LOG_FILE = BASE / "generation-log.jsonl"
@@ -186,7 +189,7 @@ def upload_reference():
     return jsonify({
         "reference_id": ref_id,
         "filename": filename,
-        "url": f"/reference/{filename}",
+        "url": f"{SPRITE_PREFIX}/reference/{filename}",
     })
 
 
@@ -205,7 +208,7 @@ def list_references():
         refs.append({
             "reference_id": f.stem,
             "filename": f.name,
-            "url": f"/reference/{f.name}",
+            "url": f"{SPRITE_PREFIX}/reference/{f.name}",
             "mtime": f.stat().st_mtime,
         })
     return jsonify(refs)
@@ -297,10 +300,10 @@ def generate():
             response_data = {
                 "status": "done",
                 "output_name": result["generation_id"],
-                "sheet_url": f"/output/{Path(result['sheet_path']).name}",
-                "metadata_url": f"/output/{Path(result['metadata_path']).name}",
-                "gif_url": f"/output/{Path(result['gif_path']).name}" if result.get("gif_path") else None,
-                "frame_urls": [f"/frames/{Path(p).name}" for p in result["frames_paths"]],
+                "sheet_url": f"{SPRITE_PREFIX}/output/{Path(result['sheet_path']).name}",
+                "metadata_url": f"{SPRITE_PREFIX}/output/{Path(result['metadata_path']).name}",
+                "gif_url": f"{SPRITE_PREFIX}/output/{Path(result["gif_path"]).name}" if result.get("gif_path") else None,
+                "frame_urls": [f"{SPRITE_PREFIX}/frames/{Path(p).name}" for p in result["frames_paths"]],
                 "frames_per_row": result["frames_per_row"],
                 "actions_config": result["actions_config"],
                 "sprite_size": sprite_size,
@@ -436,13 +439,13 @@ def generate():
         response_data = {
             "status": "done",
             "output_name": output_name,
-            "sheet_url": f"/output/{Path(result['sheet_path']).name}",
-            "metadata_url": f"/output/{Path(result['metadata_path']).name}",
-            "gif_url": f"/output/{gif_path.name}" if gif_result else None,
+            "sheet_url": f"{SPRITE_PREFIX}/output/{Path(result['sheet_path']).name}",
+            "metadata_url": f"{SPRITE_PREFIX}/output/{Path(result['metadata_path']).name}",
+            "gif_url": f"{SPRITE_PREFIX}/output/{gif_path.name}" if gif_result else None,
             "total_frames": total_frames,
             "grid_size": grid_size,
             "sprite_size": sprite_size,
-            "frame_urls": [f"/frames/{Path(p).name}" for p in frame_paths],
+            "frame_urls": [f"{SPRITE_PREFIX}/frames/{Path(p).name}" for p in frame_paths],
         }
 
         log_entry = {
@@ -534,7 +537,7 @@ def regenerate_frame():
 
         return jsonify({
             "status": "ok",
-            "frame_url": f"/frames/{frame_path.name}",
+            "frame_url": f"{SPRITE_PREFIX}/frames/{frame_path.name}",
             "frame_index": frame_index,
         })
     except Exception as e:
@@ -600,9 +603,9 @@ def rebuild_sheet():
 
     return jsonify({
         "status": "ok",
-        "sheet_url": f"/output/{Path(result['sheet_path']).name}",
-        "gif_url": f"/output/{output_name}.gif" if gif_result else None,
-        "frame_urls": [f"/frames/{Path(p).name}" for p in frame_paths],
+        "sheet_url": f"{SPRITE_PREFIX}/output/{Path(result['sheet_path']).name}",
+        "gif_url": f"{SPRITE_PREFIX}/output/{output_name}.gif" if gif_result else None,
+        "frame_urls": [f"{SPRITE_PREFIX}/frames/{Path(p).name}" for p in frame_paths],
     })
 
 
