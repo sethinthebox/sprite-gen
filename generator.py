@@ -156,11 +156,11 @@ def _remove_background(img: Image.Image, threshold: int = 15) -> Image.Image:
 def pixelate_image(image_bytes: bytes, target_size: int) -> Image.Image:
     """Convert an AI-generated image to a pixel art sprite.
 
-    Does three things:
-    1. Resize down to target_size × target_size using nearest-neighbor
-       (preserves hard pixel edges — no smoothing).
-    2. Sharpen to recover crispness after resize.
-    3. Remove solid background, replacing it with transparency.
+    Does four things in order:
+    1. Open and convert to RGBA.
+    2. Remove background at native resolution (512px) — more precise.
+    3. Resize down to target_size using nearest-neighbor.
+    4. Normalize: anchor character feet at consistent Y position.
 
     Args:
         image_bytes: Raw PNG/JPEG bytes from the API.
@@ -171,19 +171,79 @@ def pixelate_image(image_bytes: bytes, target_size: int) -> Image.Image:
     """
     img = Image.open(io.BytesIO(image_bytes)).convert("RGBA")
 
-    # Nearest-neighbor resize — critical for pixel art look
-    img_small = img.resize(
-        (target_size, target_size),
-        Image.Resampling.NEAREST,
-    )
+    # Step 1: Remove background at full resolution (512px) before pixelation
+    # This is more accurate — more pixels to detect background vs character
+    img = _remove_background(img, threshold=20)
 
-    # Sharpen slightly to recover crispness after resize
+    # Step 2: Nearest-neighbor resize — critical for pixel art look
+    img_small = img.resize((target_size, target_size), Image.Resampling.NEAREST)
+
+    # Step 3: Sharpen to recover crispness after resize
     img_small = img_small.filter(ImageFilter.SHARPEN)
 
-    # Remove solid background (FLUX doesn't generate true alpha)
-    img_small = _remove_background(img_small)
+    # Step 4: Normalize — anchor character feet at consistent Y position
+    img_small = normalize_sprite(img_small, target_size)
 
     return img_small
+
+
+
+
+def normalize_sprite(img: Image.Image, target_size: int = 64) -> Image.Image:
+    """Normalize a sprite frame so the character is consistently anchored.
+
+    Finds the non-transparent content bounding box and shifts the character
+    so feet land at a consistent Y position (82% from top = typical standing height).
+    This fixes FLUX's tendency to place characters at slightly different
+    vertical positions in each frame, which breaks animation.
+
+    Call this AFTER pixelation.
+
+    Args:
+        img: PIL RGBA image (sprite frame at target_size).
+        target_size: Frame size in pixels.
+
+    Returns:
+        Normalized PIL RGBA image.
+    """
+    w, h = target_size, target_size
+    frame = img.convert("RGBA")
+    if frame.size != (w, h):
+        frame = frame.resize((w, h), Image.Resampling.NEAREST)
+
+    # Find content bounding box
+    y_min, y_max = h, 0
+    x_min, x_max = w, 0
+    for y in range(h):
+        for x in range(w):
+            _, _, _, a = frame.getpixel((x, y))
+            if a > 10:
+                if y < y_min: y_min = y
+                if y > y_max: y_max = y
+                if x < x_min: x_min = x
+                if x > x_max: x_max = x
+
+    if y_max <= y_min:
+        return frame  # empty frame
+
+    # Anchor feet at 82% from top
+    anchor_y = int(target_size * 0.82)
+    content_bottom = y_max
+    vertical_shift = anchor_y - content_bottom
+
+    # Center horizontally
+    paste_x = (w - (x_max - x_min + 1)) // 2
+    paste_y = y_min + vertical_shift
+
+    # Clamp to stay in bounds
+    paste_x = max(0, min(w - (x_max - x_min + 1), paste_x))
+    paste_y = max(0, min(h - (y_max - y_min + 1), paste_y))
+
+    # Extract content and place it
+    content = frame.crop((x_min, y_min, x_max + 1, y_max + 1))
+    normalized = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    normalized.paste(content, (paste_x, paste_y), content)
+    return normalized
 
 
 # ── Frame I/O ──────────────────────────────────────────────────────────────────
