@@ -269,6 +269,7 @@ def generate():
     actions_input = data.get("actions")
     sprite_size = int(data.get("sprite_size", 64))
     style_suffix = data.get("style_suffix", "retro pixel art, no background, transparent PNG").strip()
+    user_seed = int(data["seed"]) if data.get("seed") else None
 
     # ── New row-based format ─────────────────────────────────────────────────
     if base_character and actions_input:
@@ -292,6 +293,7 @@ def generate():
                 actions=actions,
                 sprite_size=sprite_size,
                 style_suffix=style_suffix,
+                user_seed=user_seed,
             )
 
             sheet_name = Path(result["sheet_path"]).name
@@ -309,6 +311,7 @@ def generate():
                 "actions_config": result["actions_config"],
                 "sprite_size": sprite_size,
                 "total_frames": len(result["frames_paths"]),
+                "action_seeds": result.get("action_seeds", {}),
             }
 
             append_log({
@@ -316,6 +319,7 @@ def generate():
                 "output_name": result["generation_id"],
                 "base_character": base_character,
                 "actions": actions,
+                "action_seeds": result.get("action_seeds", {}),
                 "sprite_size": sprite_size,
                 "style_suffix": style_suffix,
                 "sheet_url": response_data["sheet_url"],

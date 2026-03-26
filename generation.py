@@ -42,6 +42,7 @@ def generate_sprite_sheet(
     actions: List[str],
     sprite_size: int = 64,
     style_suffix: str = "retro pixel art, no background, transparent PNG",
+    user_seed: Optional[int] = None,
     config_path: str = None,
 ) -> dict:
     """Generate a full sprite sheet with all actions as rows.
@@ -75,6 +76,12 @@ def generate_sprite_sheet(
 
     config = load_config()
     base = build_base_character(base_character)
+
+    # Pre-generate seeds: one per action, stored for reproducibility
+    # Use user_seed as base if provided, otherwise random
+    base_seed = user_seed if user_seed is not None else random.randint(0, 2**31)
+    # Derive one seed per action from base seed
+    seeds = [(base_seed + i) % (2**31) for i in range(len(actions))]
 
     # Collect all action_frames for assembler
     action_frames: List[tuple] = []
@@ -139,6 +146,7 @@ def generate_sprite_sheet(
         "generation_id": generation_id,
         "base_character": base_character,
         "actions": actions,
+        "action_seeds": {action: seeds[actions.index(action)] for action in actions},
         "sprite_size": sprite_size,
         "style_suffix": style_suffix,
         "frame_count": len(all_frame_paths),
