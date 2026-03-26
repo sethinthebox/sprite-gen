@@ -600,7 +600,7 @@ input[type="range"] {
   gap: 8px;
 }
 </style>
-<script>window.BASE_URL = "/sprite"; window.SG_VERSION = "v=20260326c";</script></head>
+<script>window.BASE_URL = "";</script></head>
 <body>
 
 <!-- Header -->
@@ -856,7 +856,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 // ─── Style Guide ───────────────────────────────────────────────────────────────
 async function loadStyleGuide() {
   try {
-    const res = await fetch(BASE_URL + '/style-guide');
+    const res = await fetch('/sprite/style-guide');
     const data = await res.json();
     state.currentStyle = data.current || '';
     state.stylePresets = data.presets || {};
@@ -890,7 +890,7 @@ async function saveStylePreset() {
   if (!name) { alert('Enter a preset name'); return; }
   const style = document.getElementById('style-guide').value;
   state.stylePresets[name] = style;
-  await fetch(BASE_URL + '/style-guide', {
+  await fetch('/sprite/style-guide', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ presets: state.stylePresets })
@@ -902,7 +902,7 @@ async function saveStylePreset() {
 async function clearStyleGuide() {
   document.getElementById('style-guide').value = '';
   state.currentStyle = '';
-  await fetch(BASE_URL + '/style-guide', {
+  await fetch('/sprite/style-guide', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ current: '' })
@@ -928,7 +928,7 @@ async function handleRefUpload(file) {
   const fd = new FormData();
   fd.append('file', file);
   try {
-    const res = await fetch(BASE_URL + '/upload-reference', { method: 'POST', body: fd });
+    const res = await fetch('/sprite/upload-reference', { method: 'POST', body: fd });
     const data = await res.json();
     if (data.error) { showError(data.error); return; }
     state.selectedRef = { reference_id: data.reference_id, filename: data.filename };
@@ -939,7 +939,7 @@ async function handleRefUpload(file) {
 
 async function loadReferences() {
   try {
-    const res = await fetch(BASE_URL + '/references');
+    const res = await fetch('/sprite/references');
     const refs = await res.json();
     const list = document.getElementById('ref-list');
     list.innerHTML = '';
@@ -990,7 +990,7 @@ function clearRefSelection() {
 // ─── Prompt Templates ──────────────────────────────────────────────────────────
 async function loadTemplates() {
   try {
-    const res = await fetch(BASE_URL + '/templates');
+    const res = await fetch('/sprite/templates');
     const templates = await res.json();
     const grid = document.getElementById('template-grid');
     grid.innerHTML = '';
@@ -1011,7 +1011,7 @@ async function loadTemplates() {
 // ─── Config ────────────────────────────────────────────────────────────────────
 async function loadConfig() {
   try {
-    const res = await fetch(BASE_URL + '/config');
+    const res = await fetch('/sprite/config');
     const cfg = await res.json();
     document.getElementById('cfg-api-key').value   = cfg.deepinfra_api_key || '';
     document.getElementById('cfg-base-url').value  = cfg.deepinfra_base_url || '';
@@ -1038,7 +1038,7 @@ async function saveConfig() {
     body.seed = document.getElementById('cfg-seed').value.trim();
 
   try {
-    const res = await fetch(BASE_URL + '/config', {
+    const res = await fetch('/sprite/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
@@ -1055,7 +1055,7 @@ async function saveConfig() {
 // ─── Generation Log ────────────────────────────────────────────────────────────
 async function loadGenLog() {
   try {
-    const res = await fetch(BASE_URL + '/generation-log');
+    const res = await fetch('/sprite/generation-log');
     const entries = await res.json();
     const list = document.getElementById('gen-log-list');
     list.innerHTML = '';
@@ -1111,7 +1111,7 @@ function loadLogEntry(entry) {
 
 async function clearGenLog() {
   if (!confirm('Clear all generation history?')) return;
-  await fetch(BASE_URL + '/generation-log', { method: 'DELETE' }).catch(() => {});
+  await fetch('/sprite/generation-log', { method: 'DELETE' }).catch(() => {});
   await loadGenLog();
 }
 
@@ -1153,7 +1153,7 @@ async function generate() {
   setProgress(5, 'Sending frames to AI...');
 
   try {
-    const res = await fetch(BASE_URL + '/generate', {
+    const res = await fetch('/sprite/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
@@ -1278,7 +1278,7 @@ async function regenFrame(index) {
   log(`Regenerating frame ${index}...`);
 
   try {
-    const res = await fetch(BASE_URL + '/regenerate-frame', {
+    const res = await fetch('/sprite/regenerate-frame', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1317,7 +1317,7 @@ async function regenFrame(index) {
 
 async function rebuildSheet() {
   try {
-    const res = await fetch(BASE_URL + '/rebuild-sheet', {
+    const res = await fetch('/sprite/rebuild-sheet', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

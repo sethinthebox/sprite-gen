@@ -18,13 +18,19 @@ BASE = Path(__file__).parent
 OUTPUT_DIR = BASE / "output"
 FRAMES_DIR = BASE / "frames"
 REF_DIR = BASE / "reference-library"
-
-# URL prefix for deployment (Flask runs behind nginx at /sprite/)
-SPRITE_PREFIX = "/sprite"
 TEMPLATES_DIR = BASE / "prompt-templates"
 STYLE_GUIDE_FILE = BASE / "style-guide.json"
 GEN_LOG_FILE = BASE / "generation-log.jsonl"
 CONFIG_FILE = BASE / "config.json"
+
+# URL prefix for all routes — Flask serves at /sprite/* behind nginx
+PREFIX = "/sprite"
+
+# ── URL helpers ────────────────────────────────────────────────────────────────
+
+def _u(path: str) -> str:
+    """Prefix a relative path with PREFIX for use in JSON responses."""
+    return f"{PREFIX}{path}" if path.startswith("/") else f"{PREFIX}/{path}"
 
 
 # ── Init dirs ─────────────────────────────────────────────────────────────────
@@ -66,23 +72,16 @@ def _ensure_default_templates():
             "partial": "dungeon tile or environment piece, stone floor, brick wall section, dark atmospheric, pixel art game background tile, transparent edges"
         },
     }
-    changed = False
     for name, data in defaults.items():
         if not (TEMPLATES_DIR / f"{name}.json").exists():
             (TEMPLATES_DIR / f"{name}.json").write_text(json.dumps(data, indent=2))
-            changed = True
-    return changed
 
 
-# ── Routes ────────────────────────────────────────────────────────────────────
+# ── Routes (all prefixed with /sprite) ───────────────────────────────────────
 
-@app.route("/")
+@app.route(f"{PREFIX}/")
 def index():
     response = make_response(render_template("index.html"))
-    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-    response.headers["Pragma"] = "no-cache"
-    response.headers["Expires"] = "0"
-    return response
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
@@ -91,12 +90,11 @@ def index():
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 
-@app.route("/config", methods=["GET", "POST"])
+@app.route(f"{PREFIX}/config", methods=["GET", "POST"])
 def manage_config():
     """GET: return public config (no API key). POST: update config fields."""
     if request.method == "GET":
         cfg = load_config()
-        # Mask API key
         if cfg.get("deepinfra_api_key"):
             cfg["deepinfra_api_key"] = mask_key(cfg["deepinfra_api_key"])
         return jsonify(cfg)
@@ -120,7 +118,7 @@ def mask_key(key: str) -> str:
 
 # ── Style Guide ────────────────────────────────────────────────────────────────
 
-@app.route("/style-guide", methods=["GET", "POST"])
+@app.route(f"{PREFIX}/style-guide", methods=["GET", "POST"])
 def style_guide():
     if request.method == "GET":
         return jsonify(json.loads(STYLE_GUIDE_FILE.read_text()))
@@ -137,7 +135,7 @@ def style_guide():
 
 # ── Templates ──────────────────────────────────────────────────────────────────
 
-@app.route("/templates", methods=["GET"])
+@app.route(f"{PREFIX}/templates", methods=["GET"])
 def list_templates():
     templates = {}
     for f in sorted(TEMPLATES_DIR.glob("*.json")):
@@ -148,7 +146,7 @@ def list_templates():
     return jsonify(templates)
 
 
-@app.route("/templates", methods=["POST"])
+@app.route(f"{PREFIX}/templates", methods=["POST"])
 def save_template():
     """Save or delete a template. DELETE removes it."""
     data = request.get_json() or {}
@@ -169,7 +167,7 @@ def save_template():
 
 # ── Reference Images ───────────────────────────────────────────────────────────
 
-@app.route("/upload-reference", methods=["POST"])
+@app.route(f"{PREFIX}/upload-reference", methods=["POST"])
 def upload_reference():
     if "file" not in request.files:
         return jsonify({"error": "No file part"}), 400
@@ -189,11 +187,11 @@ def upload_reference():
     return jsonify({
         "reference_id": ref_id,
         "filename": filename,
-        "url": f"{SPRITE_PREFIX}/reference/{filename}",
+        "url": _u(f"/reference/{filename}"),
     })
 
 
-@app.route("/reference/<filename>")
+@app.route(f"{PREFIX}/reference/<filename>")
 def serve_reference(filename):
     safe = REF_DIR / Path(filename).name
     if not safe.exists() or not safe.is_relative_to(REF_DIR):
@@ -201,20 +199,20 @@ def serve_reference(filename):
     return send_file(safe)
 
 
-@app.route("/references", methods=["GET"])
+@app.route(f"{PREFIX}/references", methods=["GET"])
 def list_references():
     refs = []
     for f in sorted(REF_DIR.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
         refs.append({
             "reference_id": f.stem,
             "filename": f.name,
-            "url": f"{SPRITE_PREFIX}/reference/{f.name}",
+            "url": _u(f"/reference/{f.name}"),
             "mtime": f.stat().st_mtime,
         })
     return jsonify(refs)
 
 
-@app.route("/reference/<ref_id>", methods=["DELETE"])
+@app.route(f"{PREFIX}/reference/<ref_id>", methods=["DELETE"])
 def delete_reference(ref_id):
     for f in REF_DIR.iterdir():
         if f.stem == ref_id:
@@ -225,7 +223,7 @@ def delete_reference(ref_id):
 
 # ── Generation Log ─────────────────────────────────────────────────────────────
 
-@app.route("/generation-log", methods=["GET", "DELETE"])
+@app.route(f"{PREFIX}/generation-log", methods=["GET", "DELETE"])
 def get_generation_log():
     if request.method == "DELETE":
         GEN_LOG_FILE.write_text("")
@@ -239,7 +237,6 @@ def get_generation_log():
                     entries.append(json.loads(line))
                 except Exception:
                     pass
-    # Return most recent first, limit 50
     return jsonify(list(reversed(entries[-50:])))
 
 
@@ -249,7 +246,7 @@ def append_log(entry: dict):
 
 # ── Generate ───────────────────────────────────────────────────────────────────
 
-@app.route("/generate", methods=["POST"])
+@app.route(f"{PREFIX}/generate", methods=["POST"])
 def generate():
     """Row-based sprite sheet generation.
 
@@ -297,20 +294,24 @@ def generate():
                 style_suffix=style_suffix,
             )
 
+            sheet_name = Path(result["sheet_path"]).name
+            meta_name = Path(result["metadata_path"]).name
+            gif_name = Path(result["gif_path"]).name if result.get("gif_path") else None
+
             response_data = {
                 "status": "done",
                 "output_name": result["generation_id"],
-                "sheet_url": f"{SPRITE_PREFIX}/output/{Path(result['sheet_path']).name}",
-                "metadata_url": f"{SPRITE_PREFIX}/output/{Path(result['metadata_path']).name}",
-                "gif_url": f"{SPRITE_PREFIX}/output/{Path(result["gif_path"]).name}" if result.get("gif_path") else None,
-                "frame_urls": [f"{SPRITE_PREFIX}/frames/{Path(p).name}" for p in result["frames_paths"]],
+                "sheet_url": _u(f"/output/{sheet_name}"),
+                "metadata_url": _u(f"/output/{meta_name}"),
+                "gif_url": _u(f"/output/{gif_name}") if gif_name else None,
+                "frame_urls": [_u(f"/frames/{Path(p).name}") for p in result["frames_paths"]],
                 "frames_per_row": result["frames_per_row"],
                 "actions_config": result["actions_config"],
                 "sprite_size": sprite_size,
                 "total_frames": len(result["frames_paths"]),
             }
 
-            log_entry = {
+            append_log({
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "output_name": result["generation_id"],
                 "base_character": base_character,
@@ -319,8 +320,7 @@ def generate():
                 "style_suffix": style_suffix,
                 "sheet_url": response_data["sheet_url"],
                 "gif_url": response_data["gif_url"],
-            }
-            append_log(log_entry)
+            })
 
             return jsonify(response_data)
 
@@ -353,28 +353,23 @@ def generate():
     total_frames = grid_size * grid_size
     output_name = f"sprite_{int(time.time())}"
 
-    # Apply steps override
     if steps_override and isinstance(steps_override, int):
         config = dict(config)
         config["generation_steps"] = max(1, min(8, steps_override))
 
-    # Prepend style guide if set
     style_guide = ""
-    sg_path = BASE / "style-guide.json"
-    if sg_path.exists():
-        sg_data = json.loads(sg_path.read_text())
+    if STYLE_GUIDE_FILE.exists():
+        sg_data = json.loads(STYLE_GUIDE_FILE.read_text())
         style_guide = sg_data.get("current", "").strip()
     if style_guide_override:
         style_guide = style_guide_override.strip()
 
-    # Load template partial if set
     template_partial = ""
     if template_name:
         tp_path = TEMPLATES_DIR / f"{template_name}.json"
         if tp_path.exists():
             template_partial = json.loads(tp_path.read_text()).get("partial", "")
 
-    # Build reference image URL if provided
     ref_url = ""
     if reference_image_id:
         for f in REF_DIR.iterdir():
@@ -387,20 +382,11 @@ def generate():
         from generator import generate_frame, pixelate_image, save_frames
         from assembler import assemble_spritesheet as _asm
 
-        frame_prompts = []
+        frames = []
         for i in range(total_frames):
             action = actions[i % len(actions)]
-            frame_prompts.append(ACTION_PROMPTS.get(action, action))
-
-        frames = []
-        for i, frame_prompt in enumerate(frame_prompts):
-            parts = []
-            if template_partial:
-                parts.append(template_partial)
-            if style_guide:
-                parts.append(style_guide)
-            parts.append(prompt)
-            parts.append(frame_prompt)
+            frame_prompt = ACTION_PROMPTS.get(action, action)
+            parts = [x for x in [template_partial, style_guide, prompt, frame_prompt] if x]
             full = " ".join(parts)
             print(f"[{i+1}/{total_frames}] {full[:80]}...")
             raw = generate_frame(full, size=512, config=config, seed=seed)
@@ -408,15 +394,12 @@ def generate():
             frames.append((frame_prompt, sprite))
 
         frame_paths = save_frames(frames, FRAMES_DIR)
-        print(f"Saved {len(frame_paths)} frames")
 
-        # Build action_frames for assembler: each action gets 4 frames
-        action_frames = []
-        for i, action in enumerate(actions):
-            start = i * grid_size
-            end = start + grid_size
-            if end <= len(frame_paths):
-                action_frames.append((action, frame_paths[start:end]))
+        action_frames = [
+            (action, frame_paths[i * grid_size : i * grid_size + grid_size])
+            for i, action in enumerate(actions)
+            if i * grid_size + grid_size <= len(frame_paths)
+        ]
 
         result = _asm(
             action_frames=action_frames,
@@ -425,30 +408,25 @@ def generate():
             frames_per_row=grid_size,
             output_dir=str(OUTPUT_DIR),
         )
-        print(f"Sprite sheet: {result['sheet_path']}")
 
         gif_path = OUTPUT_DIR / f"{output_name}.gif"
-        gif_result = generate_gif(
-            [str(Path(p)) for p in frame_paths],
-            str(gif_path),
-            delay=100,
-        )
+        gif_result = generate_gif([str(p) for p in frame_paths], str(gif_path), delay=100)
         if gif_result:
             print(f"GIF: {gif_result}")
 
         response_data = {
             "status": "done",
             "output_name": output_name,
-            "sheet_url": f"{SPRITE_PREFIX}/output/{Path(result['sheet_path']).name}",
-            "metadata_url": f"{SPRITE_PREFIX}/output/{Path(result['metadata_path']).name}",
-            "gif_url": f"{SPRITE_PREFIX}/output/{gif_path.name}" if gif_result else None,
+            "sheet_url": _u(f"/output/{Path(result['sheet_path']).name}"),
+            "metadata_url": _u(f"/output/{Path(result['metadata_path']).name}"),
+            "gif_url": _u(f"/output/{gif_path.name}") if gif_result else None,
             "total_frames": total_frames,
             "grid_size": grid_size,
             "sprite_size": sprite_size,
-            "frame_urls": [f"{SPRITE_PREFIX}/frames/{Path(p).name}" for p in frame_paths],
+            "frame_urls": [_u(f"/frames/{Path(p).name}") for p in frame_paths],
         }
 
-        log_entry = {
+        append_log({
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "output_name": output_name,
             "prompt": prompt,
@@ -461,8 +439,7 @@ def generate():
             "seed": seed or "",
             "sheet_url": response_data["sheet_url"],
             "gif_url": response_data["gif_url"],
-        }
-        append_log(log_entry)
+        })
 
         return jsonify(response_data)
 
@@ -473,7 +450,7 @@ def generate():
 
 # ── Regenerate single frame ───────────────────────────────────────────────────
 
-@app.route("/regenerate-frame", methods=["POST"])
+@app.route(f"{PREFIX}/regenerate-frame", methods=["POST"])
 def regenerate_frame():
     """Regenerate a single frame by index and return its URL."""
     data = request.get_json()
@@ -501,7 +478,6 @@ def regenerate_frame():
     if not config.get("deepinfra_api_key") or config["deepinfra_api_key"] == "YOUR_API_KEY_HERE":
         return jsonify({"error": "API key not configured"}), 400
 
-    # Load style guide
     style_guide = ""
     if STYLE_GUIDE_FILE.exists():
         sg_data = json.loads(STYLE_GUIDE_FILE.read_text())
@@ -509,7 +485,6 @@ def regenerate_frame():
     if style_guide_override:
         style_guide = style_guide_override.strip()
 
-    # Load template
     template_partial = ""
     if template_name:
         tp_path = TEMPLATES_DIR / f"{template_name}.json"
@@ -517,27 +492,19 @@ def regenerate_frame():
             template_partial = json.loads(tp_path.read_text()).get("partial", "")
 
     frame_prompt = ACTION_PROMPTS.get(action, action)
-    parts = []
-    if template_partial:
-        parts.append(template_partial)
-    if style_guide:
-        parts.append(style_guide)
-    parts.append(prompt)
-    parts.append(frame_prompt)
+    parts = [x for x in [template_partial, style_guide, prompt, frame_prompt] if x]
     full = " ".join(parts)
 
     try:
         from generator import generate_frame, pixelate_image
         raw = generate_frame(full, size=512, config=config, seed=seed)
         sprite = pixelate_image(raw, sprite_size)
-
-        # Save as regen frame
         frame_path = FRAMES_DIR / f"frame_{frame_index:03d}.png"
         sprite.save(str(frame_path), "PNG")
 
         return jsonify({
             "status": "ok",
-            "frame_url": f"{SPRITE_PREFIX}/frames/{frame_path.name}",
+            "frame_url": _u(f"/frames/{frame_path.name}"),
             "frame_index": frame_index,
         })
     except Exception as e:
@@ -545,9 +512,9 @@ def regenerate_frame():
         return jsonify({"error": str(e)}), 500
 
 
-# ── Download routes ─────────────────────────────────────────────────────────────
+# ── Static file serving ────────────────────────────────────────────────────────
 
-@app.route("/output/<filename>")
+@app.route(f"{PREFIX}/output/<filename>")
 def download_output(filename):
     file_path = OUTPUT_DIR / Path(filename).name
     if not file_path.exists():
@@ -555,7 +522,7 @@ def download_output(filename):
     return send_file(file_path, as_attachment=True)
 
 
-@app.route("/frames/<filename>")
+@app.route(f"{PREFIX}/frames/<filename>")
 def download_frame(filename):
     file_path = FRAMES_DIR / Path(filename).name
     if not file_path.exists():
@@ -563,33 +530,36 @@ def download_frame(filename):
     return send_file(file_path, as_attachment=True)
 
 
-@app.route("/actions")
+# ── Actions ────────────────────────────────────────────────────────────────────
+
+@app.route(f"{PREFIX}/actions")
 def list_actions():
     return jsonify({"actions": list(ACTION_PROMPTS.keys())})
 
 
-# ── Rebuild sprite sheet from current frames ───────────────────────────────────
+# ── Rebuild sprite sheet from current frames ─────────────────────────────────
 
-@app.route("/rebuild-sheet", methods=["POST"])
+@app.route(f"{PREFIX}/rebuild-sheet", methods=["POST"])
 def rebuild_sheet():
     """Rebuild sprite sheet from existing numbered frames in frames/ directory."""
     data = request.get_json() or {}
-    grid_size = int(data.get("grid_size", 4))  # frames per row
+    grid_size = int(data.get("grid_size", 4))
     output_name = data.get("output_name", f"rebuild_{int(time.time())}")
 
-    # Collect numbered frames in order
     frame_paths = sorted([str(p) for p in FRAMES_DIR.glob("frame_*.png")])
     if not frame_paths:
         return jsonify({"error": "No frames found"}), 400
 
-    # Convert flat frame list to action_frames format (one unnamed action)
-    # Assumes frames are sequential: 000,001,002... grouped by grid_size
-    action_frames = [(f"row_{i//grid_size}", frame_paths[i:i+grid_size])
-                     for i in range(0, len(frame_paths), grid_size)]
+    action_frames = [
+        (f"row_{i // grid_size}", frame_paths[i : i + grid_size])
+        for i in range(0, len(frame_paths), grid_size)
+    ]
     action_frames = [(name, paths) for name, paths in action_frames if len(paths) == grid_size]
 
     if not action_frames:
-        return jsonify({"error": f"Need {grid_size} frames to build a row"}), 400
+        return jsonify({"error": f"Need {grid_size} frames per row to build sheet"}), 400
+
+    from assembler import assemble_spritesheet
 
     result = assemble_spritesheet(
         action_frames=action_frames,
@@ -603,9 +573,9 @@ def rebuild_sheet():
 
     return jsonify({
         "status": "ok",
-        "sheet_url": f"{SPRITE_PREFIX}/output/{Path(result['sheet_path']).name}",
-        "gif_url": f"{SPRITE_PREFIX}/output/{output_name}.gif" if gif_result else None,
-        "frame_urls": [f"{SPRITE_PREFIX}/frames/{Path(p).name}" for p in frame_paths],
+        "sheet_url": _u(f"/output/{Path(result['sheet_path']).name}"),
+        "gif_url": _u(f"/output/{output_name}.gif") if gif_result else None,
+        "frame_urls": [_u(f"/frames/{Path(p).name}") for p in frame_paths],
     })
 
 
@@ -614,5 +584,5 @@ def rebuild_sheet():
 if __name__ == "__main__":
     init()
     port = 5000
-    print(f"Sprite Generator → http://localhost:{port}")
+    print(f"Sprite Generator → http://localhost:{port}{PREFIX}")
     app.run(host="0.0.0.0", port=port, debug=False)
