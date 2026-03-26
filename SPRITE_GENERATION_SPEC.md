@@ -345,3 +345,18 @@ for direction in DIRECTIONS:
 
 ### Ollama Status
 Ollama is installed but no models are loaded. Not currently used. Can be enabled for prompt improvement if needed.
+
+### Reproducibility via Frame Cache
+
+DeepInfra FLUX-schnell **ignores the seed parameter** — same prompt + seed produces different images on each call. This breaks reproducibility.
+
+**Solution:** Frame cache at `.frame_cache/{hash}.bin` keyed on `SHA256(prompt:seed)[:32]`.
+
+**Behavior:**
+- First call with `(prompt, seed)` → calls API, stores result in cache, returns result
+- Second call with same `(prompt, seed)` → returns cached result (no API call)
+- Different seed or prompt → API call, new cache entry
+
+**Cache location:** `.frame_cache/` directory (excluded from git/rsync)
+
+**For regeneration:** Same prompt + same seed = same cached image. Clear `.frame_cache/` to reset.
