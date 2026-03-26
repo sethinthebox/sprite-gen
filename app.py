@@ -75,7 +75,11 @@ def _ensure_default_templates():
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    response = make_response(render_template("index.html"))
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 
 # ── Config ─────────────────────────────────────────────────────────────────────
