@@ -23,6 +23,7 @@ from generator import (
     pixelate_image,
     load_config,
     validate_frame,
+    normalize_sprite,
 )
 
 MAX_RETRIES = 3
