@@ -7,22 +7,47 @@ Architecture note:
 """
 
 import base64
+import hashlib
 import io
 import json
+import os
 import time
 import requests
 from pathlib import Path
 from typing import List, Optional, Tuple
 
+
 from PIL import Image, ImageFilter
 
 DEFAULT_CONFIG = "config.json"
+# Cache directory for reproducible generation (DeepInfra FLUX-schnell ignores seeds)
+_CACHE_DIR = Path(__file__).parent / ".frame_cache"
+
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 
 def load_config() -> dict:
     path = Path(__file__).parent / DEFAULT_CONFIG
     return json.loads(path.read_text())
+
+def _cache_key(prompt: str, seed: int) -> str:
+    """Deterministic cache key from prompt + seed."""
+    data = f"{prompt}:{seed}".encode()
+    return hashlib.sha256(data).hexdigest()[:32]
+
+def _cache_get(key: str) -> Optional[bytes]:
+    """Return cached bytes if exists, else None."""
+    path = _CACHE_DIR / f"{key}.bin"
+    if path.exists():
+        return path.read_bytes()
+    return None
+
+def _cache_set(key: str, data: bytes) -> None:
+    """Store bytes in cache."""
+    _CACHE_DIR.mkdir(exist_ok=True)
+    path = _CACHE_DIR / f"{key}.bin"
+    path.write_bytes(data)
+
 
 
 # ── Generation ────────────────────────────────────────────────────────────────
@@ -63,6 +88,14 @@ def generate_frame(
         "response_format": "b64_json",
     }
 
+    # Check cache first — DeepInfra FLUX-schnell ignores seeds, so we
+    # simulate reproducibility by caching results keyed on (prompt, seed).
+    cache_key = _cache_key(prompt, seed) if seed is not None else None
+    if cache_key:
+        cached = _cache_get(cache_key)
+        if cached is not None:
+            return cached
+
     if seed is not None:
         payload["seed"] = int(seed)
 
@@ -83,7 +116,10 @@ def generate_frame(
 
     data = response.json()
     b64 = data["data"][0]["b64_json"]
-    return base64.b64decode(b64)
+    result = base64.b64decode(b64)
+    if cache_key:
+        _cache_set(cache_key, result)
+    return result
 
 
 # ── Pixel art conversion ───────────────────────────────────────────────────────
