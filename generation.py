@@ -149,8 +149,10 @@ def generate_sprite_sheet(
                     # ── Raw QC loop: generate until raw FLUX output passes QC ──
                     raw_qc_passed = False
                     raw_qc_tries = 0
-                    last_error = None
-                    while not raw_qc_passed and raw_qc_tries < MAX_RETRIES:
+                    last_errors = None
+                    good_raw = None
+
+                    while raw_qc_tries < MAX_RETRIES:
                         raw = generate_frame(
                             prompt=full_prompt,
                             size=512,
@@ -162,16 +164,22 @@ def generate_sprite_sheet(
                             raw_qc_result = qc_raw_flux_image(raw, expected_figures=4)
                             if not raw_qc_result.passed:
                                 raw_qc_tries += 1
-                                seed = (seed + 1) % (2**31)  # Try new seed
-                                last_error = raw_qc_result.errors
+                                seed = (seed + 1) % (2**31)
+                                last_errors = raw_qc_result.errors
                                 print(f"    raw QC fail — {raw_qc_result.errors[:2]} — retrying ({raw_qc_tries})")
                                 continue
-                        raw_qc_passed = True
+                            good_raw = raw  # Keep the good raw bytes
+                            raw_qc_passed = True
+                            break
+                        else:
+                            good_raw = raw
+                            break
 
-                    if not raw_qc_passed:
-                        print(f"    raw QC failed after {MAX_RETRIES} retries: {last_error[:2]}")
+                    # If all retries exhausted, use the last raw (even if bad)
+                    if not raw_qc_passed and good_raw is None:
+                        good_raw = raw
 
-                    sprite = pixelate_image(raw, sprite_size)
+                    sprite = pixelate_image(good_raw, sprite_size)
                     qc = validate_frame(sprite, sprite_size,
                                       reference_feet_y=frame_ref_feet_y)
                     candidates.append((sprite, qc, seed))
