@@ -29,6 +29,15 @@ from generator import (
 
 MAX_RETRIES = 3
 
+# Raw QC: check FLUX output before pixelation
+try:
+    from raw_qc import qc_raw_flux_image, qc_with_retry
+    RAW_QC_AVAILABLE = True
+except Exception as e:
+    print(f"  [raw_qc] could not import: {e}")
+    RAW_QC_AVAILABLE = False
+    qc_raw_flux_image = None
+
 # Frame ranker: use vision model when available, QC rules as fallback
 try:
     from frame_ranker import select_candidates, select_best, qc_score
@@ -136,20 +145,40 @@ def generate_sprite_sheet(
             for cand_idx in range(N_CANDIDATES):
                 try:
                     seed = action_seed + cand_idx
-                    raw = generate_frame(
-                        prompt=full_prompt,
-                        size=512,
-                        config=config,
-                        seed=seed,
-                    )
+
+                    # ── Raw QC loop: generate until raw FLUX output passes QC ──
+                    raw_qc_passed = False
+                    raw_qc_tries = 0
+                    last_error = None
+                    while not raw_qc_passed and raw_qc_tries < MAX_RETRIES:
+                        raw = generate_frame(
+                            prompt=full_prompt,
+                            size=512,
+                            config=config,
+                            seed=seed,
+                        )
+
+                        if RAW_QC_AVAILABLE and qc_raw_flux_image is not None:
+                            raw_qc_result = qc_raw_flux_image(raw, expected_figures=4)
+                            if not raw_qc_result.passed:
+                                raw_qc_tries += 1
+                                seed = (seed + 1) % (2**31)  # Try new seed
+                                last_error = raw_qc_result.errors
+                                print(f"    raw QC fail — {raw_qc_result.errors[:2]} — retrying ({raw_qc_tries})")
+                                continue
+                        raw_qc_passed = True
+
+                    if not raw_qc_passed:
+                        print(f"    raw QC failed after {MAX_RETRIES} retries: {last_error[:2]}")
+
                     sprite = pixelate_image(raw, sprite_size)
                     qc = validate_frame(sprite, sprite_size,
                                       reference_feet_y=frame_ref_feet_y)
                     candidates.append((sprite, qc, seed))
                     if qc.passed:
-                        print(f"    candidate {cand_idx+1}: QC passed (feet={qc.feet_y})")
+                        print(f"    candidate {cand_idx+1}: raw_qc=pass QC=pass (feet={qc.feet_y})")
                     else:
-                        print(f"    candidate {cand_idx+1}: QC fail — {qc.reasons}")
+                        print(f"    candidate {cand_idx+1}: raw_qc=pass QC=fail — {qc.reasons}")
                 except Exception as e:
                     print(f"    candidate {cand_idx+1}: ERROR — {e}")
 
