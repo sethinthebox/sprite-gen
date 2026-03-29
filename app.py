@@ -534,6 +534,82 @@ def download_frame(filename):
     return send_file(file_path, as_attachment=True)
 
 
+@app.route(f"{PREFIX}/candidates", methods=["POST"])
+def generate_candidates():
+    """Generate N candidate sprites for a single frame position."""
+    data = request.get_json() or {}
+    base_character = data.get("base_character", "").strip()
+    action = data.get("action", "idle")
+    animation_frame = int(data.get("animation_frame", 0))
+    n_candidates = int(data.get("n_candidates", 6))
+    sprite_size = int(data.get("sprite_size", 64))
+    if not base_character:
+        return jsonify({"error": "base_character is required"}), 400
+    try:
+        import candidates as _candidates
+        result = _candidates.generate_candidates(
+            base_character=base_character, action=action,
+            animation_frame=animation_frame, n_candidates=n_candidates,
+            sprite_size=sprite_size,
+        )
+        return jsonify({
+            "status": "ok",
+            "candidates": [
+                {"index": c["index"],
+                 "url": _u(f"/frames/{Path(c['path']).name}"),
+                 "qc_score": c["qc_score"],
+                 "qc_passed": c["qc_passed"],
+                 "seed": c["seed"]}
+                for c in result["candidates"]
+            ],
+            "action": result["action"],
+            "animation_frame": result["animation_frame"],
+            "prompt": result["prompt"],
+            "n_generated": result["n_generated"],
+        })
+    except Exception as e:
+        return jsonify({"error": str(e), "trace": traceback.format_exc()}), 500
+
+
+@app.route(f"{PREFIX}/animate", methods=["POST"])
+def animate():
+    """Generate 8-directional animation from selected sprite + character."""
+    data = request.get_json() or {}
+    base_character = data.get("base_character", "").strip()
+    reference_sprite_url = data.get("reference_sprite_url", "").strip()
+    actions = data.get("actions", ["idle", "walk"])
+    sprite_size = int(data.get("sprite_size", 64))
+    if not base_character:
+        return jsonify({"error": "base_character is required"}), 400
+    try:
+        import directional as _directional
+        info = _directional.generate_directional_spritesheet(
+            base_character=base_character,
+            reference_sprite_path=None,
+            actions=actions,
+            sprite_size=sprite_size,
+        )
+        gif_urls = {}
+        for action_name, rows in info["action_dirs"].items():
+            direction_frames = [fps[0] for d, fps in rows if fps]
+            if direction_frames:
+                gif_path = OUTPUT_DIR / f"directions_{action_name}_{info['base_seed']}.gif"
+                generate_gif(direction_frames, str(gif_path), delay=150)
+                gif_urls[action_name] = _u(f"/output/{gif_path.name}")
+        return jsonify({
+            "status": "ok",
+            "directions": info["directions"],
+            "actions": info["actions"],
+            "base_seed": info["base_seed"],
+            "gif_urls": gif_urls,
+        })
+    except Exception as e:
+        return jsonify({"error": str(e), "trace": traceback.format_exc()}), 500
+
+
+    return send_file(file_path, as_attachment=True)
+
+
 # ── Actions ────────────────────────────────────────────────────────────────────
 
 @app.route(f"{PREFIX}/actions")
