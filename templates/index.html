@@ -1048,134 +1048,50 @@ input[type="range"] {
 
       <div class="panel">
         <div class="panel-title">🎭 Character</div>
-        <textarea class="spro-textarea" id="spro-char" placeholder="Describe your character...">isometric pixel art older businessman, late 50s, gray temples, salt and pepper hair, pristine navy suit, white shirt, red tie, polished shoes</textarea>
-        <div class="char-chips">
-          <button class="char-chip" onclick="sproSetChar(this.textContent)">Businessman</button>
-          <button class="char-chip" onclick="sproSetChar(this.textContent)">Soldier</button>
-          <button class="char-chip" onclick="sproSetChar(this.textContent)">Ninja</button>
-          <button class="char-chip" onclick="sproSetChar(this.textContent)">Knight</button>
-          <button class="char-chip" onclick="sproSetChar(this.textContent)">Robot</button>
-          <button class="char-chip" onclick="sproSetChar(this.textContent)">Wizard</button>
-        </div>
+        <textarea class="spro-textarea" id="spro-char" placeholder="Describe your character...">isometric pixel art robot, boxy body, glowing red eyes</textarea>
       </div>
 
       <div class="panel">
-        <div class="panel-title">🎒 Held Item</div>
-        <select class="spro-select" id="spro-item">
-          <option value="holding briefcase">Briefcase</option>
-          <option value="holding combat knife">Combat Knife</option>
-          <option value="holding pistol">Pistol</option>
-          <option value="holding rifle">Rifle</option>
-          <option value="holding shotgun">Shotgun</option>
-          <option value="holding sword">Sword</option>
-          <option value="holding katana">Katana</option>
-          <option value="holding axe">Axe</option>
-          <option value="holding torch">Torch</option>
-          <option value="holding lantern">Lantern</option>
-          <option value="holding shield">Shield</option>
-          <option value="holding wand">Wand</option>
-          <option value="holding staff">Staff</option>
-          <option value="holding book">Book</option>
-          <option value="holding cup">Cup</option>
-          <option value="bare handed">Bare Handed</option>
+        <div class="panel-title">🎬 Action</div>
+        <select class="spro-select" id="spro-action">
+          <option value="idle" selected>Idle / Standing</option>
+          <option value="walk">Walk Cycle</option>
         </select>
-      </div>
-
-      <div class="panel">
-        <div class="panel-title">🎬 Animation</div>
-        <select class="spro-select" id="spro-anim" onchange="sproUpdatePreview()">
-          <option value="idle">Idle / Standing</option>
-          <option value="walk" selected>Walk Cycle</option>
-          <option value="run">Run Cycle</option>
-          <option value="attack">Attack / Strike</option>
-          <option value="hurt">Hurt / Hit</option>
-          <option value="die">Death</option>
-          <option value="jump">Jump</option>
-          <option value="cast">Cast / Spell</option>
-          <option value="dance">Dance</option>
-        </select>
-
         <div class="spro-field" style="margin-top:8px;">
-          <div class="spro-label">Directions</div>
-          <div class="dir-row">
-            <button class="dir-btn" data-dirs="4" onclick="sproSetDirs(4)">4-Dir</button>
-            <button class="dir-btn active" data-dirs="8" onclick="sproSetDirs(8)">8-Dir</button>
-          </div>
-        </div>
-
-        <div class="spro-field" style="margin-top:8px;">
-          <div class="spro-label">Frames per Direction</div>
-          <select class="spro-select" id="spro-frames" onchange="sproUpdatePreview()">
-            <option value="4" selected>4 frames</option>
-            <option value="6">6 frames</option>
-            <option value="8">8 frames</option>
+          <div class="spro-label">Candidates</div>
+          <select class="spro-select" id="spro-n-candidates">
+            <option value="4">4 sprites</option>
+            <option value="6" selected>6 sprites</option>
+            <option value="8">8 sprites</option>
           </select>
         </div>
       </div>
 
-      <div class="panel">
-        <div class="panel-title">⚙️ Technical</div>
-
-        <div class="spro-field">
-          <div class="spro-label">Sprite Size</div>
-          <select class="spro-select" id="spro-size" onchange="sproUpdatePreview()">
-            <option value="32">32×32 Retro</option>
-            <option value="48">48×48</option>
-            <option value="64" selected>64×64 Standard</option>
-            <option value="96">96×96 Large</option>
-            <option value="128">128×128 HD</option>
-          </select>
-        </div>
-
-        <div class="spro-field" style="margin-top:8px;">
-          <div class="spro-label">FLUX Model</div>
-          <select class="spro-select" id="spro-model">
-            <option value="schnell" selected>FLUX Schnell (Fast)</option>
-            <option value="dev">FLUX Dev (Better)</option>
-          </select>
-        </div>
-
-        <div class="spro-field" style="margin-top:8px;">
-          <div class="spro-label">Reference Image</div>
-          <select class="spro-select" id="spro-ref">
-            <option value="">None</option>
-            <option value="img2img">Use Uploaded Reference</option>
-          </select>
-        </div>
-
-        <div class="spro-toggle" style="margin-top:8px;">
-          <div>
-            <div class="spro-toggle-label">Reproducible</div>
-            <div class="spro-toggle-desc">Same seed = same character</div>
-          </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="spro-use-seed" checked>
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-
-        <div class="spro-field" style="margin-top:8px;">
-          <div class="spro-label">Seed Value</div>
-          <input type="number" class="spro-input" id="spro-seed" placeholder="Random if blank">
-        </div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-title">📊 Output</div>
-        <div id="spro-output-preview" style="font-size:0.78em;color:var(--text-dim);background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;">
-          8 directions × 4 frames = <strong>32 total frames</strong><br>
-          Sheet: <strong>512×256px</strong> at 64×64 per frame
-        </div>
-      </div>
-
-      <button class="spro-gen-btn" id="spro-gen-btn" onclick="sproGenerate()">
-        ✨ Generate Sprite Sheet
+      <!-- STEP 1: Generate candidates -->
+      <button class="spro-gen-btn" id="spro-candidates-btn" onclick="sproGenerateCandidates()">
+        🎲 Generate Candidates
       </button>
 
-      <div id="spro-seed-display" style="display:none;margin-top:8px;">
-        <div class="spro-field">
-          <div class="spro-label">Seeds (save to reproduce)</div>
-          <div class="spro-seeds" id="spro-seeds-content"></div>
+      <div id="spro-status" style="display:none;margin-top:8px;font-size:0.82em;padding:8px;border-radius:6px;background:var(--bg);border:1px solid var(--border);"></div>
+
+      <!-- STEP 2: Animate (shown after candidate selection) -->
+      <div id="spro-animate-section" style="display:none;margin-top:12px;">
+        <div style="font-size:0.78em;color:var(--text-dim);margin-bottom:6px;">✓ Sprite selected — ready to animate</div>
+        <button class="spro-gen-btn" id="spro-animate-btn" onclick="sproAnimate()">
+          🔄 Animate (8 Directions)
+        </button>
+      </div>
+
+      <!-- Direction GIF preview (shown after animation) -->
+      <div id="spro-result-section" style="display:none;margin-top:12px;">
+        <div style="font-size:0.82em;font-weight:600;margin-bottom:8px;">Done! 🎉</div>
+        <div style="font-size:0.75em;color:var(--text-dim);margin-bottom:8px;">Rotation preview:</div>
+        <img id="spro-result-gif" style="width:100%;max-width:200px;border:1px solid var(--border);border-radius:6px;">
+        <div style="margin-top:8px;">
+          <a id="spro-sheet-link" href="#" target="_blank" style="font-size:0.75em;">📋 View Full Sheet</a>
+        </div>
+        <div style="margin-top:8px;">
+          <a id="spro-gif-link" href="#" target="_blank" style="font-size:0.75em;">🎬 Download GIF</a>
         </div>
       </div>
 
@@ -1184,14 +1100,18 @@ input[type="range"] {
     <!-- RIGHT: Preview -->
     <div class="spro-main">
       <div id="spro-preview-area">
-        <div class="spro-empty" style="color:var(--text-dim);font-size:0.85em;text-align:center;padding:40px 20px;line-height:1.6;">
-          Generate a sprite sheet to see preview here.<br>
-          Each row = one direction. Each column = animation frame.
+        <div id="spro-candidates-grid" style="display:none;padding:16px;">
+          <div style="font-size:0.85em;color:var(--text-dim);margin-bottom:12px;">Click a sprite to select it for animation:</div>
+          <div id="spro-candidates-row" style="display:flex;gap:12px;flex-wrap:wrap;"></div>
+        </div>
+        <div id="spro-empty-msg" class="spro-empty" style="color:var(--text-dim);font-size:0.85em;text-align:center;padding:40px 20px;line-height:1.6;">
+          Enter a character description and click<br><strong>Generate Candidates</strong> to start.
         </div>
       </div>
     </div>
 
   </div>
+</div>
 </div>
 
 <script>
@@ -1231,6 +1151,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     document.getElementById('tab-generate').style.display = tab === 'generate' ? 'block' : 'none';
     document.getElementById('tab-log').style.display     = tab === 'log'      ? 'block' : 'none';
     document.getElementById('tab-settings').style.display = tab === 'settings' ? 'block' : 'none';
+    document.getElementById('tab-spro').style.display    = tab === 'spro'     ? 'flex'  : 'none';
     if (tab === 'log') loadGenLog();
   });
 });
@@ -1806,6 +1727,156 @@ document.head.insertAdjacentHTML('beforeend', `
 .btn-sm.secondary { background: var(--surface); border: 1px solid var(--border2); color: var(--text-dim); }
 .btn-sm.secondary:hover { border-color: var(--accent); color: var(--text); }
 </style>`);
+
+
+// ─── Sprite Sheet Pro (8-directional) ─────────────────────────────────────────
+
+
+// ─── Sprite Sheet Pro: Candidate Selection Workflow ──────────────────────────
+
+let sproState = {
+  candidates: [],      // [{index, url, qc_score, qc_passed, seed}]
+  selectedIdx: null,
+  char: '',
+  action: 'idle',
+  nCandidates: 6,
+};
+
+function sproSetStatus(msg, type='info') {
+  const el = document.getElementById('spro-status');
+  if (!el) return;
+  el.style.display = 'block';
+  el.style.color = type === 'err' ? 'var(--red)' : 'var(--text-dim)';
+  el.textContent = msg;
+}
+
+function sproClearStatus() {
+  const el = document.getElementById('spro-status');
+  if (el) { el.style.display = 'none'; }
+}
+
+async function sproGenerateCandidates() {
+  const char = document.getElementById('spro-char').value.trim();
+  if (!char) { sproSetStatus('Please enter a character description.', 'err'); return; }
+
+  const action = document.getElementById('spro-action').value;
+  const n = parseInt(document.getElementById('spro-n-candidates').value);
+
+  sproState = { candidates: [], selectedIdx: null, char, action, nCandidates: n };
+
+  const btn = document.getElementById('spro-candidates-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Generating...';
+  sproSetStatus('Generating candidates...', 'info');
+  document.getElementById('spro-candidates-grid').style.display = 'none';
+  document.getElementById('spro-empty-msg').style.display = 'block';
+  document.getElementById('spro-animate-section').style.display = 'none';
+  document.getElementById('spro-result-section').style.display = 'none';
+
+  try {
+    const res = await fetch('/sprite/candidates', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        base_character: char,
+        action: action,
+        animation_frame: 0,
+        n_candidates: n,
+        sprite_size: 64
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed');
+
+    sproState.candidates = data.candidates;
+    sproState.selectedIdx = null;
+
+    // Show candidates grid
+    const grid = document.getElementById('spro-candidates-grid');
+    const row = document.getElementById('spro-candidates-row');
+    grid.style.display = 'block';
+    document.getElementById('spro-empty-msg').style.display = 'none';
+
+    row.innerHTML = sproState.candidates.map((c, i) => `
+      <div style="position:relative;cursor:pointer;" onclick="sproSelectCandidate(${i})">
+        <img src="${c.url}" style="width:96px;height:96px;border:2px solid transparent;border-radius:8px;" id="spro-cand-img-${i}">
+        <div style="position:absolute;bottom:4px;right:4px;font-size:0.65em;background:rgba(0,0,0,0.7);padding:2px 4px;border-radius:4px;">
+          ${c.qc_passed ? '✅' : '❌'} ${c.qc_score.toFixed(1)}
+        </div>
+        <div style="position:absolute;top:4px;left:4px;font-size:0.65em;background:rgba(0,0,0,0.7);padding:2px 4px;border-radius:4px;">#${i+1}</div>
+      </div>
+    `).join('');
+
+    sproSetStatus(`${sproState.candidates.length} candidates generated — click one to select`, 'info');
+    btn.textContent = '🔄 Generate New Candidates';
+    btn.disabled = false;
+
+  } catch(e) {
+    sproSetStatus('Error: ' + e.message, 'err');
+    btn.textContent = '🎲 Generate Candidates';
+    btn.disabled = false;
+  }
+}
+
+function sproSelectCandidate(idx) {
+  sproState.selectedIdx = idx;
+  // Highlight selected, unhighlight others
+  document.querySelectorAll('[id^="spro-cand-img-"]').forEach((el, i) => {
+    el.style.borderColor = i === idx ? 'var(--accent)' : 'transparent';
+    el.style.boxShadow = i === idx ? '0 0 8px var(--accent)' : 'none';
+  });
+  const c = sproState.candidates[idx];
+  sproSetStatus(`Selected candidate #${idx+1} (seed=${c.seed}) — click Animate when ready`, 'info');
+  document.getElementById('spro-animate-section').style.display = 'block';
+  document.getElementById('spro-result-section').style.display = 'none';
+}
+
+async function sproAnimate() {
+  if (sproState.selectedIdx === null) {
+    sproSetStatus('Please select a candidate first.', 'err');
+    return;
+  }
+  const c = sproState.candidates[sproState.selectedIdx];
+  const btn = document.getElementById('spro-animate-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Animating...';
+  sproSetStatus('Generating 8 directions... this takes ~2-3 minutes.', 'info');
+
+  try {
+    const res = await fetch('/sprite/animate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        base_character: sproState.char,
+        reference_sprite_url: c.url,
+        actions: [sproState.action],
+        sprite_size: 64
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Animation failed');
+
+    // Show result
+    document.getElementById('spro-animate-section').style.display = 'none';
+    const gifUrl = data.gif_urls?.[sproState.action];
+    if (gifUrl) {
+      document.getElementById('spro-result-gif').src = gifUrl;
+      document.getElementById('spro-gif-link').href = gifUrl;
+    }
+    if (data.sheet_url) {
+      document.getElementById('spro-sheet-link').href = data.sheet_url;
+    }
+    document.getElementById('spro-result-section').style.display = 'block';
+    sproSetStatus('Done! 🎉', 'info');
+    btn.textContent = '🔄 Animate (8 Directions)';
+    btn.disabled = false;
+  } catch(e) {
+    sproSetStatus('Error: ' + e.message, 'err');
+    btn.textContent = '🔄 Animate (8 Directions)';
+    btn.disabled = false;
+  }
+}
+
 </script>
 </body>
 </html>
